@@ -1,5 +1,8 @@
-# UnscentedKalmanFilters
-A lightweight implementation of Kalman unscented Kalman filtering with the following features
+# UnscentedTransforms
+A package for propagating Gaussian vectors (GaussianVector) through nonlinear functions and approximating 
+uncertainty.
+
+Includes a lightweight implementation of Kalman unscented Kalman filtering with the following features:
 1. Fallback to linear methods for transition if the state predictor is linear
 2. Fallback to linear methods for observations if the state observer is linear
 3. Consistent use of the square-root form for improved numerical stability
