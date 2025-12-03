@@ -6,21 +6,7 @@ To Do:
        Since it operates on the same states, updating the modified problem should update the original
 =#
 
-using LinearAlgebra
-import Statistics.mean
-import Statistics.cov
 
-"""
-Sigma point parameters for the unscented kalman filter (α~0 => EKF α~1=> Nonlinear Gaussian, κ=0, β=2 for Gaussian)
-"""
-Base.@kwdef struct SigmaParams
-    α :: Float64 = 0.001
-    κ :: Float64 = 0.0
-    β :: Float64 = 2.0
-end
-
-LinearPredictor = Tuple{<:AbstractArray,<:AbstractArray}
-StatePredictor  = Union{Function, LinearPredictor}
 
 """
 State-Space model
@@ -47,20 +33,6 @@ function StateSpaceModel(fx::F1, hx::F2, x, QU, RU, PU, θ) where {F1,F2}
     return StateSpaceModel{T, F1, F2}(fx, hx, x, QU, RU, PU, θ)
 end
 
-"""
-GaussianState: contains the canonical representation of a model's state (x = state, P = state covariance)
-"""
-@kwdef struct GaussianState
-    x :: Vector{Float64}
-    P :: Matrix{Float64}
-end
-
-function GaussianState(model::StateSpaceModel)
-    return GaussianState(
-        x = deepcopy(model.x),
-        P = model.PU'model.PU
-    )
-end
 
 """
 kalman_filter!(SS::StateSpaceModel{T}, y::AbstractVector, u; multithreaded_predict=false, multithreaded_observe=false, outlier=3.0) where T
@@ -82,52 +54,9 @@ function kalman_filter!(SS::StateSpaceModel{T}, y::AbstractVector, u; multithrea
     return (xh=xh, Ph=Ph, yh=yh, K=K)
 end
 
-
-
-"""
-Weights for sigma points, calculated from SigmaParams and the state dimension L
-"""
-Base.@kwdef struct SigmaWeights
-    c :: Float64
-    μ :: Tuple{Float64, Float64}
-    Σ :: Tuple{Float64, Float64}
-end
-
-function SigmaWeights(L::Int64, θ::SigmaParams=SigmaParams())
-    α = θ.α
-    κ = θ.κ
-    β = θ.β
-
-    λ  = α^2*(L+κ)-L                          #scaling factor
-    c  = L + λ                                #scaling factor
-    Wn = 0.5/c
-    Wμ = ((λ/c), Wn)                         #weights for means
-    WΣ = (Wμ[1] + (1-α^2+β), Wn)             #weights for covariance
-    return SigmaWeights(c=c, μ=Wμ, Σ=WΣ)
-end
-
 function SigmaWeights(SS::StateSpaceModel)
     return SigmaWeights(length(SS.x), SS.θ)
 end
-
-
-"""
-Sigma point generation (including weights)
-"""
-Base.@kwdef struct SigmaPoints{T}
-    points   :: Matrix{T}
-    weights  :: SigmaWeights
-end
-
-function SigmaPoints(x::AbstractVector{T}, L::LowerTriangular, w::SigmaWeights) where T<:Real
-    A = sqrt(w.c)*L
-    points = [(x) (x .+ A) (x .- A)]
-    return SigmaPoints(points=points, weights=w)
-end
-SigmaPoints(M::AbstractMatrix{T}, w::SigmaWeights) where T = SigmaPoints{T}(M, w)
-SigmaPoints(x::AbstractVector{T}, R::UpperTriangular, w::SigmaWeights) where T<:Real = SigmaPoints(x, R', w)
-SigmaPoints(x::AbstractVector{T}, C::Cholesky, w::SigmaWeights) where T<:Real = SigmaPoints(x, C.L, w)
-
 
 
 """
@@ -308,16 +237,7 @@ function predict(f::Function, 𝒳::SigmaPoints{T}, u; multithreaded=false) wher
     end
 end
 
-"""
-Returns √(A² + B²) for matrices A and B where √M is the upper triangular square-root of matrix M
-"""
-function root_sum_squared(A::AbstractMatrix, B::AbstractMatrix)
-    R = UpperTriangular(qr!([A;B]).R)
-    if any(c->R[c]<0, diagind(R))
-        R .= .-R
-    end
-    return R
-end
+
 
 
 """
@@ -331,48 +251,22 @@ function subtract(𝒳::SigmaPoints, x::AbstractVector)
 end
 
 
-"""
-Returns a weighted mean vector of a set of sigma points
-"""
-function mean(𝒳::SigmaPoints{T}) where T
-    weight(ii::Integer) = ifelse(ii==1, 𝒳.weights.μ[1], 𝒳.weights.μ[2])
 
-    μ  = zeros(promote_type(T, Float64), size(𝒳.points,1))
-    ii = 0
-    for x in eachcol(𝒳.points)
-        ii += 1
-        μ .+= weight(ii) .* x
+
+
+
+#=
+
+"""
+Returns √(A² + B²) for matrices A and B where √M is the upper triangular square-root of matrix M
+"""
+function root_sum_squared(A::AbstractMatrix, B::AbstractMatrix)
+    R = UpperTriangular(qr!([A;B]).R)
+    if any(c->R[c]<0, diagind(R))
+        R .= .-R
     end
-    return μ
+    return R
 end
-
-
-"""
-Returns a weighted covariance matrix of two sets of sigma points, based on weights from the first set
-"""
-function cov(𝒳::SigmaPoints{T1}, 𝒴::SigmaPoints{T2}; centered=false) where {T1, T2}
-    weight(ii::Integer) = ifelse(ii==1, 𝒳.weights.Σ[1], 𝒳.weights.Σ[2])
-
-    if size(𝒳.points, 2) != size(𝒴.points, 2)
-        error("Two sets of sigma points must have the same number of points")
-    end
-
-    #Caclulate the mean
-    (μx, μy) = centered ? (0.0, 0.0) : (mean(𝒳), mean(𝒴))
-    
-    #Fill out the covariance matrix
-    T = promote_type(Float64, T1, T2)
-    S = zeros(T, size(𝒳.points,1), size(𝒴.points,1))
-    ii = 0
-    for (x, y) in zip(eachcol(𝒳.points), eachcol(𝒴.points))
-        ii += 1
-        S .+= weight(ii) .* (x.-μx) .* (y.-μy)'
-    end
-    return S
-end
-
-cov(𝒳::SigmaPoints) = cov(𝒳,𝒳)
-
 
 #Updating of cholesky objects
 """
@@ -419,86 +313,8 @@ function chol_update!(ch::Cholesky, X::AbstractArray{<:Real,2}, w::Real)
     return ch
 end
 
-function chol_std(ch::Cholesky)
-    selfdot(x) = dot(x,x)
-    return [sqrt(selfdot(col)) for col in eachcol(ch.U)]
-end
-
-#Option to limit transition differences on the state (to avoid chasing outlisers)
-function limit_diff!(SS::StateSpaceModel, xh; Sigmas=10.0)
-    Δx = Sigmas.*diag(SS.sQ) 
-    SS.x .= clamp.(SS.x, xh.-Δx, xh.+Δx)
-    return SS
-end
-
-#Scale the innoviation to avoid chasing outliers
-function scale_innovation(Δy::Real, σy::Real; outlier)
-    σε = (outlier/3)*σy
-    return asinh(Δy/σε)*σε
-end
-
-
-
-
-
-# =========================================================================================================
-# Legacy code
-# =========================================================================================================
-#=
-#Sigma points around reference point
-function sigmas(x0::AbstractVector, L::LowerTriangular, c)
-    x = copy(x0)
-    N = length(x0)
-    A = sqrt(c)*L
-
-    x_plus_A  = [x + A[:,k] for k in 1:N]
-    x_minus_A = [x - A[:,k] for k in 1:N]
-    return [[x]; x_plus_A; x_minus_A]
-end
-
-#Weights of sigma points
-function sigma_weights(SS::StateSpaceModel)
-    α = SS.α
-    κ = SS.κ
-    β = SS.β
-    L = length(SS.x)
-
-    λ = α^2*(L+κ)-L                           #scaling factor
-    c = L + λ                                 #scaling factor
-    W  = fill( 0.5/c , 2*L )
-    Wm = [(λ/c) ; W]                          #weights for means
-    Wc = [Wm[1] + (1-α^2+β) ; W]              #weights for covariance
-
-    return c, Wm, Wc
-end
-
-
-
-
-#Multithreaded function sampling
-function sample_func(f::Function, X::Vector)
-    FuncTasks = [Threads.@spawn f(x) for x in X]
-    return fetch.( FuncTasks)
-end
-
-#Weighted statistics
-function sigma_mean(X::Vector, Wm::Vector{<:Real})
-    return sum(Wm .* X)
-end
-
-#Uses unscented method transform to produce a covariance
-function sigma_cov(ΔX::Vector, ΔY::Vector, Wc::Vector{<:Real})
-    CovTasks = [Threads.@spawn Wc[ii]*ΔX[ii]*ΔY[ii]' for ii in 1:length(Wc) ]
-    return sum( fetch.(CovTasks) )
-end
-
-#Uses outputs a cholseky decomposition of sigma points plus a diagonal covariance square root
-function chol_sigmas_plus_cov(ΔX::Vector, Wc::Vector{<:Real}, sQ::LowerTriangular)
-    N = length(ΔX[1])
-
-    #Return first square of the QR factorization of this wide matrix
-    sigmaTall = Array( [hcat( sqrt(Wc[2]).*ΔX[2:end]... ) sQ]' )
-    ch = Cholesky(qr( sigmaTall ).R, :U, 0)
-    return chol_update!(ch, ΔX[1], Wc[1])
-end
 =#
+
+
+
+
