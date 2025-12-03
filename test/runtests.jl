@@ -7,12 +7,14 @@ import Statistics.cov
 import Random
 
 import UnscentedTransforms.add_cov
+import UnscentedTransforms.add_cov_sqrt
 
 @testset "UnscentedTransforms.jl" begin
     Random.seed!(1234)
 
     σ  = 0.01
     C  = rand(3,5)
+    A  = rand(5,5)
     R  = Diagonal(fill(σ^2, 3))
     X  = randn(500, 5)*rand(5,5)
     Yh = X*C' 
@@ -45,6 +47,7 @@ import UnscentedTransforms.add_cov
     @test cov(Px, Px) ≈ cov(Px)
     @test cov(Px, Pyh) ≈ cov(Pyh, Px)'
 
+    @test add_cov_sqrt(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
 
 
     # Write your tests here.

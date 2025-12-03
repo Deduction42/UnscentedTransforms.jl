@@ -104,23 +104,42 @@ end
 
 
 """
-add_cov!(ch::Cholesky, ch2::Cholesky)
+add_cov(ch::Cholesky, ch2::Cholesky)
 
-Updates cholesky decomposition ch to be the equivalent of
-cholesky(ch.U'ch.U + ch2.U'+ch2.U)
+Returns a cholesky decomposition equivalent to performing
+cholesky(ch.U'*ch.U + ch2.U'*ch2.U)
 """
+add_cov(ch::Cholesky, ch2::Cholesky) = add_cov!(deepcopy(ch), ch2)
+
 function add_cov!(ch::Cholesky, ch2::Cholesky)
     x = zeros(eltype(ch2.U), size(ch2.U, 1))
 
-    #Add all of the subsequent points
     for xi in eachcol(ch2.L)
         x .= xi
         lowrankupdate!(ch, x)
     end
-
     return ch
 end
-add_cov(ch::Cholesky, ch2::Cholesky) = add_cov!(deepcopy(ch), ch2)
+
+
+"""
+add_cov_sqrt(ch::Cholesky, L::AbstractMatrix)
+
+Updates cholesky decomposition ch to be the equivalent of
+cholesky(ch.U'ch.U + L*L')
+"""
+add_cov_sqrt(ch::Cholesky, L::AbstractMatrix) = add_cov_sqrt!(deepcopy(ch), L)
+
+function add_cov_sqrt!(ch::Cholesky, L::AbstractMatrix)
+    x = zeros(eltype(L), size(L, 1))
+
+    for xi in eachcol(L)
+        x .= xi
+        lowrankupdate!(ch, x)
+    end
+    return ch
+end
+
 
 """
 Returns a weighted mean vector of a set of sigma points

@@ -31,3 +31,44 @@ NonlinearPredictor(f::Function, Σ::AbstractMatrix) = LinearPredictor(f, cholesk
 
 
 const StatePredictor  = Union{LinearPredictor, NonlinearPredictor}
+
+#=======================================================================================================================
+Prediction functions
+=======================================================================================================================#
+function predict(pred::LinearPredictor, X::GaussianVar, u)
+    xh = pred.A*X.μ + pred.B*u 
+    Σh = add_cov_sqrt(pred.Σ, pred.A*X.Σ.L)
+    return GaussianVar(xh, Σh)
+end
+
+function predict_similar(pred::LinearPredictor, X::GaussianVar{T}, u) where T
+    xh = T(pred.A*X.μ + pred.B*u)
+    Σh = add_cov_sqrt(pred.Σ, pred.A*X.Σ.L)
+    return GaussianVar(xh, Σh)
+end
+
+function predict(pred::NonlinearPredictor, X::GaussianVar, u) 
+    return predict(pred, SigmaPoints(X), u)
+end
+
+function predict_similar(pred::NonlinearPredictor, X::GaussianVar, u) 
+    return predict!(pred, SigmaPoints(X), u)
+end
+
+function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
+    f(x) = pred.f(x, u)
+    points = map(f, X.points)
+    return add_cov(SigmaPoints(points=points, weights=X.weights), pred.Σ)
+end
+
+function predict!(pred::NonlinearPredictor, X::SigmaPoints, u)
+    f(x) = pred.f(x, u)
+    for ii in eachindex(X.points)
+        X.points[ii] = f(X.points[ii])
+    end
+    return add_cov(X, pred.Σ)
+end
+
+#=======================================================================================================================
+Update functions
+=======================================================================================================================#
