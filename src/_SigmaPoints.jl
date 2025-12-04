@@ -84,7 +84,7 @@ GaussianVar(𝒳::SigmaPoints, Σ::Cholesky)
 Returns the GuassianVar equivalent of adding variance Σ to 𝒳
 """
 function GaussianVar(𝒳::SigmaPoints, Σ::Cholesky)
-    ch = deepcopy(Σ)
+    ch = copy(Σ)
 
     (w0, w1) = (𝒳.weights.Σ[1], 𝒳.weights.Σ[2])
     x = zeros(eltype(𝒳.points[begin]), length(𝒳.points[begin]))
@@ -111,7 +111,7 @@ add_cov(ch::Cholesky, ch2::Cholesky)
 Returns a cholesky decomposition equivalent to performing
 cholesky(ch.U'*ch.U + ch2.U'*ch2.U)
 """
-add_cov(ch::Cholesky, ch2::Cholesky) = add_cov!(deepcopy(ch), ch2)
+add_cov(ch::Cholesky, ch2::Cholesky) = add_cov!(copy(ch), ch2)
 
 function add_cov!(ch::Cholesky, ch2::Cholesky)
     x = zeros(eltype(ch2.U), size(ch2.U, 1))
@@ -130,7 +130,7 @@ add_lcov(ch::Cholesky, L::AbstractMatrix)
 Updates cholesky decomposition ch to be the equivalent of
 cholesky(ch.U'ch.U + L*L')
 """
-add_lcov(ch::Cholesky, L::AbstractMatrix) = add_lcov!(deepcopy(ch), L)
+add_lcov(ch::Cholesky, L::AbstractMatrix) = add_lcov!(copy(ch), L)
 
 function add_lcov!(ch::Cholesky, L::AbstractMatrix)
     x = zeros(eltype(L), size(L, 1))

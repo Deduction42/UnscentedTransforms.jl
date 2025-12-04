@@ -54,7 +54,7 @@ covview(ch::Cholesky, inds) = Cholesky(view(ch.U, inds, inds), :U, 0)
 
 View of a cholesky decomposition of a covariance matrix subspace defined by 'inds'
 """
-covview(ch::Cholesky, inds) = Cholesky(view(ch.U, inds, inds))
+covview(ch::Cholesky, inds) = Cholesky(UpperTriangular(view(ch.U, inds, inds)))
 
 #=======================================================================================================================
 Prediction functions (uncertainty propagation)
