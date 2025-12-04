@@ -15,6 +15,7 @@ If passed a matrix, the constructor automatically takes Cholesky decomposition.
     Σ :: TM
 end
 GaussianVar(x::AbstractVector, m::AbstractMatrix) = GaussianVar(x, cholesky(m))
+Base.convert(::Type{GaussianVar{TX,TM}}, x::GaussianVar) where {TX,TM} = GaussianVar(TX(x.μ), TM(x.Σ))
 
 """
 SigmaWeights(c :: Float64, μ :: Tuple{Float64, Float64}, Σ :: Tuple{Float64, Float64})
@@ -62,19 +63,21 @@ Base.@kwdef struct SigmaPoints{T<:AbstractVector}
     weights  :: SigmaWeights
 end
 
-function SigmaPoints(x::GaussianVar, w::SigmaWeights)
+SigmaPoints(X::GaussianVar, θ::SigmaParams) = SigmaPoints(X, SigmaWeights(length(X.μ), θ))
+
+function SigmaPoints(X::GaussianVar, w::SigmaWeights)
     σc = sqrt(w.c)
-    points = [x.μ]
+    points = [X.μ]
     
-    for l in eachcol(x.Σ.L)
+    for l in eachcol(X.Σ.L)
         Δ = σc.*l
-        push!(points, x.μ .+ Δ)
-        push!(points, x.μ .- Δ)
+        push!(points, X.μ .+ Δ)
+        push!(points, X.μ .- Δ)
     end
 
     return SigmaPoints(points=points, weights=w)
 end
-SigmaPoints(x::GaussianVar, θ::SigmaParams) = SigmaPoints(x, SigmaWeights(x.μ, θ))
+
 
 GaussianVar(𝒳::SigmaPoints) = GaussianVar(mean(𝒳), cholesky(cov(𝒳)))
 
@@ -295,3 +298,4 @@ function chol_var(ch::Cholesky, ii::Integer)
 end
 
 
+Base.isfinite(x::GaussianVar) = all(isfinite, x.μ) & all(isfinite, x.Σ.U)
