@@ -27,48 +27,113 @@ where x is a vector (u can be any object) and ε is white noise
 @kwdef struct NonlinearPredictor{TF<:Function, TΣ<:Cholesky} <: AbstractPredictor
     f :: TF
     Σ :: TΣ
+    w :: SigmaWeights
 end
-NonlinearPredictor(f::Function, Σ::AbstractMatrix) = LinearPredictor(f, cholesky(Σ))
+NonlinearPredictor(f::Function, Σ::AbstractMatrix, w::SigmaWeights) = NonlinearPredictor(f, cholesky(Σ), w)
 
-const StatePredictor  = Union{LinearPredictor, NonlinearPredictor}
+const StatePredictor = Union{LinearPredictor, NonlinearPredictor}
 
 #=======================================================================================================================
-Prediction functions
+Views on predictors (enables removal of missing observations with minimal allocation)
 =======================================================================================================================#
+function Base.view(pred::LinearPredictor, inds)
+    return LinearPredictor(
+        view(pred.A, inds, inds),
+        view(pred.B, inds, :),
+        covview(pred.Σ, inds)
+    )
+end
+
+function Base.view(pred::NonlinearPredictor, inds; weights=pred.w)
+    fv(x, u) = view(pred.f(x, u), inds)
+    return NonlinearPredictor(fv, covview(pred.Σ, inds), weights)
+end
+
+"""
+covview(ch::Cholesky, inds) = Cholesky(view(ch.U, inds, inds), :U, 0)
+
+View of a cholesky decomposition of a covariance matrix subspace defined by 'inds'
+"""
+covview(ch::Cholesky, inds) = Cholesky(view(ch.U, inds, inds))
+
+#=======================================================================================================================
+Prediction functions (uncertainty propagation)
+=======================================================================================================================#
+
+#Linear predictors
 function predict(pred::LinearPredictor, X::GaussianVar, u)
     xh = pred.A*X.μ + pred.B*u 
-    Σh = add_cov_sqrt(pred.Σ, pred.A*X.Σ.L)
+    Σh = add_lcov(pred.Σ, pred.A*X.Σ.L)
     return GaussianVar(xh, Σh)
 end
 
 function predict_similar(pred::LinearPredictor, X::GaussianVar{T}, u) where T
     xh = T(pred.A*X.μ + pred.B*u)
-    Σh = add_cov_sqrt(pred.Σ, pred.A*X.Σ.L)
+    Σh = add_lcov(pred.Σ, pred.A*X.Σ.L)
     return GaussianVar(xh, Σh)
 end
 
-function predict(pred::NonlinearPredictor, X::GaussianVar, u) 
-    return predict(pred, SigmaPoints(X), u)
+#Nonlinar predictors (returns the same type as X)
+function predict(pred::NonlinearPredictor, X::GaussianVar, u; multithreaded=false)
+    Xp = predict(pred, SigmaPoints(X, pred.w), u, multithreaded=multithreaded)
+    return GaussianVar(pred.Σ, Xp)
 end
 
-function predict_similar(pred::NonlinearPredictor, X::GaussianVar, u) 
-    return predict!(pred, SigmaPoints(X), u)
-end
-
-function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
+function predict(pred::NonlinearPredictor, X::SigmaPoints, u; multithreaded=false)
     f(x) = pred.f(x, u)
-    points = map(f, X.points)
-    return add_cov(SigmaPoints(points=points, weights=X.weights), pred.Σ)
+    return SigmaPoints(map(f, X.points), X.weights)
 end
 
-function predict!(pred::NonlinearPredictor, X::SigmaPoints, u)
+function predict_similar(pred::NonlinearPredictor, X::GaussianVar, u; multithreaded=false)
+    Xp = predict!(pred, SigmaPoints(X, pred.w), u, multithreaded=multithreaded)
+    return GaussianVar(pred.Σ, Xp)
+end
+
+function predict!(pred::NonlinearPredictor, X::SigmaPoints, u; multithreaded=false)
     f(x) = pred.f(x, u)
     for ii in eachindex(X.points)
         X.points[ii] = f(X.points[ii])
     end
-    return add_cov(X, pred.Σ)
+    return X
 end
 
+
+
 #=======================================================================================================================
-Update functions
+Update functions (Kalman-Update)
 =======================================================================================================================#
+function update(obs::LinearPredictor, X::GaussianVar, y::AbstractVector, u; outlier=Inf, multithreaded=false)
+    (C, D) = (obs.A, obs.B)
+    yh = C*X.μ .+ D*u
+
+    S = add_lcov(obs.Σ, C*X.Σ.L)
+    Pxy = (X.Σ.L*X.Σ.U)*C'#Obtain cross-covariance of state and measurement innovations
+    K = (Pxy/S.U)/S.L #Kalman gain
+
+    σz = chol_std(S)
+    μ = X.μ .+ K*scale_innovation.(y.-yh, σz, outlier=outlier)
+    Σ = add_rcov(X.Σ.U*(I-K*C)', X.Σ.U*K')
+
+    return (X=GaussianVar(μ, Σ), Y=GaussianVar(yh, S), K=K)
+end
+
+
+function update(obs::NonlinearPredictor, X::GaussianVar, y::AbstractVector, u; outlier=Inf, multithreaded=false)
+    #Build the sigma points from the Gaussian variable
+    Xp = SigmaPoints(X, obs.w)
+
+    #Propagate the sigma points through the predictor
+    Yp = predict(obs.f, Xp, u, multithreaded=multithreaded)
+    Y  = GaussianVar(obs.Σ, Yp) #Predicted Y distribution
+
+    S   = Y.Σ #Innovation covariance
+    Pxy = cov(Xp, Yp) #Obtain cross-covariance of state and measurement innovations
+    K   = (Pxy/S.U)/S.L #Kalman gain
+
+    σz = chol_std(Y.Σ)
+    μ = X.μ .+ K*scale_innovation.(y.-Y.μ, σz, outlier=outlier)
+    Σ = sub_lcov(X.Σ, K*S.L)
+
+    return (X=GaussianVar(μ, Σ), Y=Y, K=K)
+end
+

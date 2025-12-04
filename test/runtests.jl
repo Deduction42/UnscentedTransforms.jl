@@ -7,7 +7,8 @@ import Statistics.cov
 import Random
 
 import UnscentedTransforms.add_cov
-import UnscentedTransforms.add_cov_sqrt
+import UnscentedTransforms.add_lcov
+import UnscentedTransforms.add_rcov
 
 @testset "UnscentedTransforms.jl" begin
     Random.seed!(1234)
@@ -42,13 +43,13 @@ import UnscentedTransforms.add_cov_sqrt
     @test GaussianVar(Px).μ ≈ Gx.μ
 
     #Test adding varainces
-    @test add_cov(Cx, Cx).U ≈ cholesky(Sx + Sx).U
-    @test add_cov(Px, Cx).Σ.U ≈ cholesky(Sx + Sx).U
     @test cov(Px, Px) ≈ cov(Px)
     @test cov(Px, Pyh) ≈ cov(Pyh, Px)'
 
-    @test add_cov_sqrt(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
-
-
+    @test add_cov(Cx, Cx).U ≈ cholesky(Sx + Sx).U
+    @test add_lcov(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
+    @test add_rcov(Cx.U*C', Cx.U*C').U ≈ cholesky(hermitianpart!(2*C*Sx*C')).U
+    @test add_lcov(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
+    @test GaussianVar(Px, Cx).Σ.U ≈ cholesky(Sx + Sx).U
     # Write your tests here.
 end

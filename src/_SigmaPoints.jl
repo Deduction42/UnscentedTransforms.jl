@@ -1,6 +1,8 @@
 using LinearAlgebra
 import Statistics.mean
 import Statistics.cov
+import Statistics.std
+import Statistics.var
 
 """
 GaussianVar(x, Σ)
@@ -77,11 +79,11 @@ SigmaPoints(x::GaussianVar, θ::SigmaParams) = SigmaPoints(x, SigmaWeights(x.μ,
 GaussianVar(𝒳::SigmaPoints) = GaussianVar(mean(𝒳), cholesky(cov(𝒳)))
 
 """
-add_cov(𝒳::SigmaPoints, Σ::Cholesky)
+GaussianVar(𝒳::SigmaPoints, Σ::Cholesky)
 
-Creates a GaussianVar from 𝒳 and adds Σ to the variance
+Returns the GuassianVar equivalent of adding variance Σ to 𝒳
 """
-function add_cov(𝒳::SigmaPoints, Σ::Cholesky)
+function GaussianVar(𝒳::SigmaPoints, Σ::Cholesky)
     ch = deepcopy(Σ)
 
     (w0, w1) = (𝒳.weights.Σ[1], 𝒳.weights.Σ[2])
@@ -101,7 +103,7 @@ function add_cov(𝒳::SigmaPoints, Σ::Cholesky)
 
     return GaussianVar(μ, ch)
 end
-
+GaussianVar(Σ::Cholesky, 𝒳::SigmaPoints) = GaussianVar(𝒳, Σ)
 
 """
 add_cov(ch::Cholesky, ch2::Cholesky)
@@ -123,14 +125,14 @@ end
 
 
 """
-add_cov_sqrt(ch::Cholesky, L::AbstractMatrix)
+add_lcov(ch::Cholesky, L::AbstractMatrix)
 
 Updates cholesky decomposition ch to be the equivalent of
 cholesky(ch.U'ch.U + L*L')
 """
-add_cov_sqrt(ch::Cholesky, L::AbstractMatrix) = add_cov_sqrt!(deepcopy(ch), L)
+add_lcov(ch::Cholesky, L::AbstractMatrix) = add_lcov!(deepcopy(ch), L)
 
-function add_cov_sqrt!(ch::Cholesky, L::AbstractMatrix)
+function add_lcov!(ch::Cholesky, L::AbstractMatrix)
     x = zeros(eltype(L), size(L, 1))
 
     for xi in eachcol(L)
@@ -140,6 +142,60 @@ function add_cov_sqrt!(ch::Cholesky, L::AbstractMatrix)
     return ch
 end
 
+"""
+add_rcov(A::AbstractMatrix, B::AbstractMatrix)
+
+Returns the equivalent of
+cholesky(A'A + B'B)
+"""
+function add_rcov(A::AbstractMatrix, B::AbstractMatrix)
+    R = qr!([A;B]).R
+
+    #Force positive diagonal by flipping row signs
+    for ii in axes(R,1)
+        if R[ii,ii] < 0
+            R[ii,:] .= flipsign.(R[ii,:], -1)
+        end
+    end
+    return Cholesky(UpperTriangular(R))
+end
+
+
+"""
+add_lcov(A::AbstractMatrix, B::AbstractMatrix)
+
+Returns the equivalent of
+cholesky(A*A' + B*B')
+"""
+function add_lcov(A::AbstractMatrix, B::AbstractMatrix)
+    L = lq!([A B]).L
+
+    #Force positive diagonal by flipping row signs
+    for ii in axes(L,1)
+        if L[ii,ii] < 0
+            L[:,ii] .= flipsign.(L[:,ii], -1)
+        end
+    end
+    return Cholesky(LowerTriangular(L))
+end
+
+"""
+sub_cov_sqrt(ch::Cholesky, L::AbstractMatrix)
+
+Updates cholesky decomposition ch to be the equivalent of
+cholesky(ch.U'ch.U - L*L')
+"""
+sub_lcov(ch::Cholesky, L::AbstractMatrix) = sub_lcov!(deepcopy(ch), L)
+
+function sub_lcov!(ch::Cholesky, L::AbstractMatrix)
+    x = zeros(eltype(L), size(L, 1))
+
+    for xi in eachcol(L)
+        x .= xi
+        lowrankdowndate!(ch, x)
+    end
+    return ch
+end
 
 """
 Returns a weighted mean vector of a set of sigma points
@@ -215,7 +271,6 @@ function chol_update!(ch::Cholesky, x::Vector, w::Real)
 end
 
 
-
 #Scale the innoviation to avoid chasing outliers
 function scale_innovation(Δy::Real, σy::Real; outlier)
     if isfinite(outlier)
@@ -226,7 +281,17 @@ function scale_innovation(Δy::Real, σy::Real; outlier)
     end
 end
 
-function chol_std(ch::Cholesky, ii::Integer)
-    sqrtdot(x) = sqrt(dot(x,x))
-    return sqrtdot(view(ch.U, :, ii))
+std(x::GaussianVar)  = chol_std(x.Σ)
+var(x::GaussianVar)  = chol_var(x.Σ)
+mean(x::GaussianVar) = x.μ
+
+chol_var(ch::Cholesky) = map(ii->chol_var(ch, ii), axes(ch.U, 2))
+chol_std(ch::Cholesky) = map(ii->chol_std(ch, ii), axes(ch.U, 2))
+
+chol_std(ch::Cholesky, ii::Integer) = sqrt(chol_var(ch, ii))
+function chol_var(ch::Cholesky, ii::Integer)
+    v = view(ch.U, :, ii)
+    return dot(v,v)
 end
+
+
