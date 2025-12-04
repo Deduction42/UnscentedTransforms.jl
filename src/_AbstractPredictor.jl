@@ -103,28 +103,28 @@ end
 #=======================================================================================================================
 Update functions (Kalman-Update)
 =======================================================================================================================#
-function update(obs::LinearPredictor, X::GaussianVar, y::AbstractVector, u; outlier=Inf)
-    (C, D) = (obs.A, obs.B)
+function update(obs::LinearPredictor, X::GaussianVar{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ} 
+    (C, D, R, P) = (obs.A, obs.B, obs.Σ, X.Σ)
     yh = C*X.μ .+ D*u
 
-    S = add_lcov(obs.Σ, C*X.Σ.L)
-    Pxy = (X.Σ.L*X.Σ.U)*C'#Obtain cross-covariance of state and measurement innovations
+    S = add_lcov(R, C*P.L)
+    Pxy = (P.L*P.U)*C'#Obtain cross-covariance of state and measurement innovations
     K = (Pxy/S.U)/S.L #Kalman gain
 
     σz = chol_std(S)
     μ = X.μ .+ K*scale_innovation.(y.-yh, σz, outlier=outlier)
-    Σ = add_lcov((I-K*C)*X.Σ.L, K*obs.Σ.L)
+    Σ = add_lcov((I-K*C)*P.L, K*R.L)
 
-    return (X=GaussianVar(μ, Σ), Y=GaussianVar(yh, S), K=K)
+    return (X=GaussianVar(Tμ(μ), TΣ(Σ)), Y=GaussianVar(yh, S), K=K)
 end
 
 
-function update(obs::NonlinearPredictor, X::GaussianVar, y::AbstractVector, u; outlier=Inf)
+function update(obs::NonlinearPredictor, X::GaussianVar{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ}
     #Build the sigma points from the Gaussian variable
     Xp = SigmaPoints(X, obs.θ)
 
     #Propagate the sigma points through the predictor
-    Yp = predict(obs.f, Xp, u)
+    Yp = predict(obs, Xp, u)
     Y  = GaussianVar(obs.Σ, Yp) #Predicted Y distribution
 
     S   = Y.Σ #Innovation covariance
@@ -135,6 +135,6 @@ function update(obs::NonlinearPredictor, X::GaussianVar, y::AbstractVector, u; o
     μ = X.μ .+ K*scale_innovation.(y.-Y.μ, σz, outlier=outlier)
     Σ = sub_lcov(X.Σ, K*S.L)
 
-    return (X=GaussianVar(μ, Σ), Y=Y, K=K)
+    return (X=GaussianVar(Tμ(μ), TΣ(Σ)), Y=Y, K=K)
 end
 
