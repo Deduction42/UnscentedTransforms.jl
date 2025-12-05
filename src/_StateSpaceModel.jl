@@ -1,5 +1,5 @@
 """
-StateSpaceModel(state<:GaussianVar, predictor<:StatePredictor, observer<:StatePredictor, outlier=Inf)
+StateSpaceModel(state<:MvGaussian, predictor<:StatePredictor, observer<:StatePredictor, outlier=Inf)
 
 A generic state-space model with a Gaussian state, but with potential linear/nonlinear predictors
 Applying a Kalman filter will use the square-root UKF for nonlinear predictors/observers while
@@ -10,7 +10,7 @@ For example, 'outlier = 6' penalizes prediction errors if they are beyond 6 stan
 away from zero (note that this standard deviation factors both prediction and measurement error).
 Conventional Kalman filter behavior occurs when 'outlier=Inf'
 """
-Base.@kwdef mutable struct StateSpaceModel{TX<:GaussianVar, TP<:StatePredictor, TO<:StatePredictor}
+Base.@kwdef mutable struct StateSpaceModel{TX<:MvGaussian, TP<:StatePredictor, TO<:StatePredictor}
     state :: TX
     predictor :: TP 
     observer  :: TO
