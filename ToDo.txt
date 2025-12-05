@@ -1,32 +1,6 @@
-(1) Rename the repo as UnscentedTransforms to adjust the scope
-    - Handling unscented transforms (for error propagation) is a lage part of the API
-    - Unscended Kalman Filter is just a part of this
-
-(2) Create "AbstractGaussianState" which contains
-    - GaussianState{V::AbstractVector, M::Union{AbstractMatrix,Cholesky}}(x,P)
-        - Object itself is immutable, but for Kalman filtering it should be mutable
-    - UnscentedTransform{V::AbstractVector}(samples)
-    - Create constructors/updators between different kinds of AbstractGaussianState
-        - Will need to define isfinite(AbstractGaussianState) to prevent NaN updates
-    - Supports following functions:
-        - predict!(fxu, x::AbstractGaussianState, u)
-        - addvar!(x::AbstractGaussianState, Q::Union{Cholesky,AbstractMatrix})
-        - updtate!(hxu, x::AbstractGaussianState, u, y::AbstractGaussianState)
-        - view(GaussianState, ind)
-    
-(3) Revamp StateSpaceModel to be more generic (look at the LowLevelParticleFilters API)
-    - StateSpaceModel{TG<:GassianState, TF, TH, TQ, TR}
-        (x::TG, fxu::TF, hxu::TH, Q::TQ, R::TR, θ::SigmaParams)
-    - Cretate two different versions of linear estimator
-        - DiscretizedLinearPredictor (ignores Δt, only stores it)
-        - ContinuousLinearPredictor (uses Δt, keeps it as a ref)
-    - Remove QR decomposition step, as it is an additional allocation. Instead use:
-        - xp = UnscentedTransform(xg)
-        - predict!(fxu, xp, u)
-        - xg = isfinite(xp) ? update!(xg, xp) : xg
-        - addvar!(xg, Q)
-        - update!(xp, xg)
-        - s = kalman_innovation(hxu, xp, u, GaussianState(y))
-            - produces KalmanInnovation(gain, state)
-        - update!(xp, s)
+(1) Add tests to make sure consisten results are obtained (compare with standard Kalman filter)
+(2) Clean up unneeded code 
+(3) Consider modifying the Kalman gain for outliers (so that the uncertainty is accounted for in the covariance)
+    -  Another strategy is to inflate the innovation covariance through a low rank update (all zeros except ith element)
+    -  If error < ncutoff*stdev, use nominal, otherwise scale stdev it so that error = ncutoff*stdev
 
