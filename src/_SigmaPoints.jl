@@ -5,17 +5,17 @@ import Statistics.std
 import Statistics.var
 
 """
-GaussianVar(x, Σ)
+MvGaussian(x, Σ)
 
 Random vector that follows a Gaussian distribution. 
 If passed a matrix, the constructor automatically takes Cholesky decomposition.
 """
-@kwdef struct GaussianVar{TX<:AbstractVector, TM<:Cholesky}
+@kwdef struct MvGaussian{TX<:AbstractVector, TM<:Cholesky}
     μ :: TX
     Σ :: TM
 end
-GaussianVar(x::AbstractVector, m::AbstractMatrix) = GaussianVar(x, cholesky(m))
-Base.convert(::Type{GaussianVar{TX,TM}}, x::GaussianVar) where {TX,TM} = GaussianVar(TX(x.μ), TM(x.Σ))
+MvGaussian(x::AbstractVector, m::AbstractMatrix) = MvGaussian(x, cholesky(m))
+Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.Σ))
 
 """
 SigmaWeights(c :: Float64, μ :: Tuple{Float64, Float64}, Σ :: Tuple{Float64, Float64})
@@ -63,9 +63,9 @@ Base.@kwdef struct SigmaPoints{T<:AbstractVector}
     weights  :: SigmaWeights
 end
 
-SigmaPoints(X::GaussianVar, θ::SigmaParams) = SigmaPoints(X, SigmaWeights(length(X.μ), θ))
+SigmaPoints(X::MvGaussian, θ::SigmaParams) = SigmaPoints(X, SigmaWeights(length(X.μ), θ))
 
-function SigmaPoints(X::GaussianVar, w::SigmaWeights)
+function SigmaPoints(X::MvGaussian, w::SigmaWeights)
     σc = sqrt(w.c)
     points = [X.μ]
     
@@ -79,14 +79,14 @@ function SigmaPoints(X::GaussianVar, w::SigmaWeights)
 end
 
 
-GaussianVar(𝒳::SigmaPoints) = GaussianVar(mean(𝒳), cholesky(cov(𝒳)))
+MvGaussian(𝒳::SigmaPoints) = MvGaussian(mean(𝒳), cholesky(cov(𝒳)))
 
 """
-GaussianVar(𝒳::SigmaPoints, Σ::Cholesky)
+MvGaussian(𝒳::SigmaPoints, Σ::Cholesky)
 
 Returns the GuassianVar equivalent of adding variance Σ to 𝒳
 """
-function GaussianVar(𝒳::SigmaPoints, Σ::Cholesky)
+function MvGaussian(𝒳::SigmaPoints, Σ::Cholesky)
     ch = copy(Σ)
 
     (w0, w1) = (𝒳.weights.Σ[1], 𝒳.weights.Σ[2])
@@ -104,9 +104,9 @@ function GaussianVar(𝒳::SigmaPoints, Σ::Cholesky)
     x .= 𝒳.points[begin] .- μ
     chol_update!(ch, x, w0)
 
-    return GaussianVar(μ, ch)
+    return MvGaussian(μ, ch)
 end
-GaussianVar(Σ::Cholesky, 𝒳::SigmaPoints) = GaussianVar(𝒳, Σ)
+MvGaussian(Σ::Cholesky, 𝒳::SigmaPoints) = MvGaussian(𝒳, Σ)
 
 """
 add_cov(ch::Cholesky, ch2::Cholesky)
@@ -284,9 +284,9 @@ function scale_innovation(Δy::Real, σy::Real; outlier)
     end
 end
 
-std(x::GaussianVar)  = chol_std(x.Σ)
-var(x::GaussianVar)  = chol_var(x.Σ)
-mean(x::GaussianVar) = x.μ
+std(x::MvGaussian)  = chol_std(x.Σ)
+var(x::MvGaussian)  = chol_var(x.Σ)
+mean(x::MvGaussian) = x.μ
 
 chol_var(ch::Cholesky) = map(ii->chol_var(ch, ii), axes(ch.U, 2))
 chol_std(ch::Cholesky) = map(ii->chol_std(ch, ii), axes(ch.U, 2))
@@ -298,4 +298,4 @@ function chol_var(ch::Cholesky, ii::Integer)
 end
 
 
-Base.isfinite(x::GaussianVar) = all(isfinite, x.μ) & all(isfinite, x.Σ.U)
+Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.Σ.U)

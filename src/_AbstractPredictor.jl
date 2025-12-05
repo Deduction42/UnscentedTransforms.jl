@@ -62,22 +62,22 @@ Prediction functions (uncertainty propagation)
 =======================================================================================================================#
 
 #Linear predictors
-function predict(pred::LinearPredictor, X::GaussianVar, u)
+function predict(pred::LinearPredictor, X::MvGaussian, u)
     xh = pred.A*X.μ + pred.B*u 
     Σh = add_lcov(pred.Σ, pred.A*X.Σ.L)
-    return GaussianVar(xh, Σh)
+    return MvGaussian(xh, Σh)
 end
 
-function predict_similar(pred::LinearPredictor, X::GaussianVar{T}, u) where T
+function predict_similar(pred::LinearPredictor, X::MvGaussian{T}, u) where T
     xh = T(pred.A*X.μ + pred.B*u)
     Σh = add_lcov(pred.Σ, pred.A*X.Σ.L)
-    return GaussianVar(xh, Σh)
+    return MvGaussian(xh, Σh)
 end
 
 #Nonlinar predictors (returns the same type as X)
-function predict(pred::NonlinearPredictor, X::GaussianVar, u)
+function predict(pred::NonlinearPredictor, X::MvGaussian, u)
     Xp = predict(pred, SigmaPoints(X, pred.θ), u)
-    return GaussianVar(pred.Σ, Xp)
+    return MvGaussian(pred.Σ, Xp)
 end
 
 function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
@@ -85,9 +85,9 @@ function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
     return SigmaPoints(map(f, X.points), X.weights)
 end
 
-function predict_similar(pred::NonlinearPredictor, X::GaussianVar, u)
+function predict_similar(pred::NonlinearPredictor, X::MvGaussian, u)
     Xp = predict!(pred, SigmaPoints(X, pred.θ), u)
-    return GaussianVar(pred.Σ, Xp)
+    return MvGaussian(pred.Σ, Xp)
 end
 
 function predict!(pred::NonlinearPredictor, X::SigmaPoints, u)
@@ -103,7 +103,7 @@ end
 #=======================================================================================================================
 Update functions (Kalman-Update)
 =======================================================================================================================#
-function update(obs::LinearPredictor, X::GaussianVar{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ} 
+function update(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ} 
     (C, D, R, P) = (obs.A, obs.B, obs.Σ, X.Σ)
     yh = C*X.μ .+ D*u
 
@@ -115,17 +115,17 @@ function update(obs::LinearPredictor, X::GaussianVar{Tμ,TΣ}, y::AbstractVector
     μ = X.μ .+ K*scale_innovation.(y.-yh, σz, outlier=outlier)
     Σ = add_lcov((I-K*C)*P.L, K*R.L)
 
-    return (X=GaussianVar(Tμ(μ), TΣ(Σ)), Y=GaussianVar(yh, S), K=K)
+    return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=MvGaussian(yh, S), K=K)
 end
 
 
-function update(obs::NonlinearPredictor, X::GaussianVar{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ}
+function update(obs::NonlinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ}
     #Build the sigma points from the Gaussian variable
     Xp = SigmaPoints(X, obs.θ)
 
     #Propagate the sigma points through the predictor
     Yp = predict(obs, Xp, u)
-    Y  = GaussianVar(obs.Σ, Yp) #Predicted Y distribution
+    Y  = MvGaussian(obs.Σ, Yp) #Predicted Y distribution
 
     S   = Y.Σ #Innovation covariance
     Pxy = cov(Xp, Yp) #Obtain cross-covariance of state and measurement innovations
@@ -135,6 +135,6 @@ function update(obs::NonlinearPredictor, X::GaussianVar{Tμ,TΣ}, y::AbstractVec
     μ = X.μ .+ K*scale_innovation.(y.-Y.μ, σz, outlier=outlier)
     Σ = sub_lcov(X.Σ, K*S.L)
 
-    return (X=GaussianVar(Tμ(μ), TΣ(Σ)), Y=Y, K=K)
+    return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=Y, K=K)
 end
 
