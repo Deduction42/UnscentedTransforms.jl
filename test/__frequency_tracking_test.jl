@@ -47,6 +47,7 @@ vsP = [10*σ₊/Δt, 10*σ₊, 10]
 QU = UpperTriangular(Matrix(Diagonal(vsQ)))
 RU = UpperTriangular(Matrix(Diagonal(vsR)))
 PU = UpperTriangular(Matrix(Diagonal(vsP)))
+outlier = 3.0
 
 function predictor_func(X, u)
     k = exp(X[3])
@@ -74,7 +75,7 @@ model = StateSpaceModel(
     state = state,
     predictor = predictor,
     observer  = observer,
-    outlier  = 3.0
+    outlier  = outlier
 )
 
 vs = [state]
@@ -88,6 +89,8 @@ end
 fig = plot(y, lc=:blue, ls=:dot, label="measured")
 plot!(fig, [s.μ[1] for s in vs[1:(end-1)]], label="velocity")
 plot!(fig, [s.μ[2] for s in vs[1:(end-1)]], label="position")
+#png(fig, joinpath(@__DIR__, "outlier cutoff $(outlier)"))
+
 #plot([sqrt( min(5*σ, s.x[1]^2/exp(s.x[3])) + s.x[2]^2) for s in vs[1:(end-1)]]) #amplitude-equivalent energy
 
 #=
