@@ -39,7 +39,7 @@ Views on predictors (enables removal of missing observations with minimal alloca
 =======================================================================================================================#
 function Base.view(pred::LinearPredictor, inds)
     return LinearPredictor(
-        view(pred.A, inds, inds),
+        view(pred.A, inds, :),
         view(pred.B, inds, :),
         covview(pred.Σ, inds)
     )

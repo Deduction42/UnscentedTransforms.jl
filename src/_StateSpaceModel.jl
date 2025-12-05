@@ -51,6 +51,11 @@ elements of y are ignored)
 function update!(ss::StateSpaceModel, y::AbstractVector, u)
     results = if all(isfinite, y)
         update(ss.observer, ss.state, y, u, outlier=ss.outlier)
+
+    elseif !any(isfinite, y)
+        @warn "No observations, skipping update"
+        nothing
+
     else
         ind = findall(isfinite, y)
         obs_view = view(ss.observer, ind)
@@ -59,13 +64,15 @@ function update!(ss::StateSpaceModel, y::AbstractVector, u)
         update(obs_view, ss.state, y_view, u)
     end
 
-    if isfinite(results.X)
+    if isnothing(results)
+        return nothing
+    elseif isfinite(results.X)
         ss.state = results.X
+        return results
     else
-        "Non-finite state result, observation not applied"
+        @warn "Non-finite state result, update not applied"
+        return results
     end
-
-    return results 
 end
 
 
