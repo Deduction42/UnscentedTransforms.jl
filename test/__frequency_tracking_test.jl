@@ -34,9 +34,9 @@ y[150] = 15
 #Test missing data after stabilization
 dy = [0; diff(y)]./Δt
 Y  = [dy'; y']
-#Y[:,200] .= NaN
-#Y[1,500] = NaN
-#Y[2,501] = NaN
+Y[:,200] .= NaN
+Y[1,500] = NaN
+Y[2,501] = NaN
 
 #Variances
 σ₊  = (σ+0.1)
