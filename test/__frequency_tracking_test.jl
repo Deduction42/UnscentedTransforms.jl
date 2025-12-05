@@ -69,7 +69,7 @@ observer = LinearPredictor(C, D, Cholesky(RU))
 #observer = NonlinearPredictor(f=observer_func, Σ=Cholesky(RU), θ=SigmaParams(α=1.0))
 
 x0 = @SVector [0, 0, log(k0)]
-state = GaussianVar(x0, Cholesky(PU))
+state = MvGaussian(x0, Cholesky(PU))
 
 model = StateSpaceModel(
     state = state,
