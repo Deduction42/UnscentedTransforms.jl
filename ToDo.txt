@@ -4,10 +4,19 @@
     - Add multithreading
 
 (2) Consider more advanced outlier mitigation strategies that properly adust uncertainty
-    -   One strategy is modifying the gain by (zc./z) where zc is the constrained innovation (as previously calculated)
+    -   One strategy is modifying the gain by scalefunc(z[ii]/chol_std(S,ii), cutoff)
         -   This will propagate this to the uncertainty
-    -   Another strategy is to inflate the innovation covariance through a low rank update (all zeros except ith element)
-        -   if error_ii > ncutoff*stdev_ii
-        -       dvar_ii = error_ii^2 - (ncutoff*stdev_ii)^2
-        -       lowrankupdate!(S, onehot(dvar_ii, ii)) #Ensure this results in chol_std(S, ii) == error_ii^2
+    -   I attempted to adjust the measurement covariance, but this did not yield a monotonic, smooth result for error*gain
 
+May want to use this as the scaling function instead of asinh
+This will be identical to the kalman filter until errors have exceeded
+
+using Plots
+using BenchmarkTools
+function scalefunc(z, cutoff=3)
+    rz = abs(z)/cutoff
+    return ifelse(rz<=1, one(rz), (1+log(rz))/rz)
+end
+vx = LinRange(0, 10, 1000)
+vy = vx.*scalefunc.(vx)
+plot(vx, vy)
