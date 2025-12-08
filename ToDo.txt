@@ -1,7 +1,4 @@
-(1) Prepare for merging into Main 
-    - Add multithreading
-
-(2) Consider more advanced outlier mitigation strategies that properly adust uncertainty
+(1) Consider more advanced outlier mitigation strategies that properly adust uncertainty
     -   One strategy is modifying the gain by scalefunc(z[ii]/chol_std(S,ii), cutoff)
         -   This will propagate this to the uncertainty
     -   I attempted to adjust the measurement covariance, but this did not yield a monotonic, smooth result for error*gain

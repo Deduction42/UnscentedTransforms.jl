@@ -18,10 +18,13 @@ using Revise
 using UnscentedTransforms
 using StaticArrays
 using LinearAlgebra
+import Random
 using Plots; plotlyjs()
-
-
 const Δt = 0.1
+
+outlier = 3.0 #Inf
+Random.seed!(1234)
+
 ω  = 2π/50
 N  = 1000
 σ  = 0.3
@@ -47,7 +50,6 @@ vsP = [10*σ₊/Δt, 10*σ₊, 10]
 QU = UpperTriangular(Matrix(Diagonal(vsQ)))
 RU = UpperTriangular(Matrix(Diagonal(vsR)))
 PU = UpperTriangular(Matrix(Diagonal(vsP)))
-outlier = 3.0
 
 function predictor_func(X, u)
     k = exp(X[3])

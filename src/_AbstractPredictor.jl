@@ -82,7 +82,13 @@ end
 
 function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
     f(x) = pred.f(x, u)
-    return SigmaPoints(map(f, X.points), X.weights)
+    f_task(x) = Threads.@spawn(pred.f(x,u))
+
+    if pred.multithreaded
+        return SigmaPoints(fetch.(map(f_task, X.points)), X.weights)
+    else
+        return SigmaPoints(map(f, X.points), X.weights)
+    end
 end
 
 function predict_similar(pred::NonlinearPredictor, X::MvGaussian, u)
@@ -92,8 +98,15 @@ end
 
 function predict!(pred::NonlinearPredictor, X::SigmaPoints, u)
     f(x) = pred.f(x, u)
-    for ii in eachindex(X.points)
-        X.points[ii] = f(X.points[ii])
+
+    if pred.multithreaded
+        Threads.@threads for ii in eachindex(X.points)
+            X.points[ii] = f(X.points[ii])
+        end
+    else
+        for ii in eachindex(X.points)
+            X.points[ii] = f(X.points[ii])
+        end
     end
     return X
 end

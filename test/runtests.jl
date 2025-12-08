@@ -55,8 +55,9 @@ import UnscentedTransforms.add_rcov
 end
 
 @testset "State Space" begin
-
-    #Classic Kalman filter equations for reference
+    #=========================================================================================================================
+    Set up classic Kalman filter equations
+    =========================================================================================================================#
     function classic_predict(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, u) where {Tμ,TΣ}
         (A, B, Q, P) = (obs.A, obs.B, Matrix(obs.Σ), Matrix(X.Σ))
 
@@ -83,6 +84,9 @@ end
     end
 
 
+    #=========================================================================================================================
+    Set up test system and simulation
+    =========================================================================================================================#
     Random.seed!(1234)
 
     #Build the LTI system
@@ -130,7 +134,6 @@ end
     lin_obs  = LinearPredictor(C, D, R)
     lin_sys  = StateSpaceModel(state=lin_state, predictor=lin_pred, observer=lin_obs)
 
-
     #Build a nonlinear test system
     f_predict(x, u) = A*x + B*u 
     f_observe(x, u) = C*x + D*u 
@@ -139,7 +142,10 @@ end
     nl_obs  = NonlinearPredictor(f_observe, cholesky(R), SigmaParams(), false)
     nl_sys  = StateSpaceModel(state=nl_state, predictor=nl_pred, observer=nl_obs)
 
-    #Test single step predictions
+
+    #=========================================================================================================================
+    Test single step predictions 
+    =========================================================================================================================#
     state  = MvGaussian(SVector{3}(X[:,1]), copy(P))
     X_classicpred = classic_predict(lin_sys.predictor, state, U[:,1])
     X_linearpred  = predict(lin_sys.predictor, state, U[:,1])
@@ -154,10 +160,12 @@ end
     @test Matrix(X_linearpred.Σ) ≈ Matrix(X_nonlinpred.Σ)
 
 
-    #Test single step updates
+    #=========================================================================================================================
+    Test single step updates
+    =========================================================================================================================#
     X_classicpost = classic_update(lin_sys.observer, state, Y[:,1], U[:,1])
     X_linearpost  = update(lin_sys.observer, state, Y[:,1], U[:,1]).X
-    X_nonlinpost  = update(lin_sys.observer, state, Y[:,1], U[:,1]).X
+    X_nonlinpost  = update(nl_sys.observer, state, Y[:,1], U[:,1]).X
 
     #Linear/Classic consistency, updates
     @test X_linearpost.μ ≈ X_classicpost.μ
@@ -167,8 +175,9 @@ end
     @test X_linearpost.μ ≈ X_nonlinpost.μ
     @test Matrix(X_linearpost.Σ) ≈ Matrix(X_nonlinpost.Σ)
 
-
-    #Run the classic Kalman filter through long history
+    #=========================================================================================================================
+    Test long history consistency
+    =========================================================================================================================#
     Xclassic = copy(X)
     for ii in 2:N 
         classic_kalman!(lin_sys, SVector{2}(Y[:,ii]), U[:,ii-1])
@@ -195,4 +204,21 @@ end
     @test Xlinear[:,N] ≈ Xnonlin[:,N]
 
 
+    #=========================================================================================================================
+    Test multithreaded nonlinear system 
+    =========================================================================================================================#
+    nl_state = MvGaussian(SVector{3}(X[:,1]), copy(P))
+    nl_pred = NonlinearPredictor(f_predict, cholesky(Q), SigmaParams(), true)
+    nl_obs  = NonlinearPredictor(f_observe, cholesky(R), SigmaParams(), true)
+    nl_sys  = StateSpaceModel(state=nl_state, predictor=nl_pred, observer=nl_obs)
+
+    X_nonlinpred  = predict(nl_sys.predictor, state, U[:,1])
+    X_nonlinpost  = update(nl_sys.observer, state, Y[:,1], U[:,1]).X
+
+    #Linear/Nonlinear consistency, updates
+    @test X_linearpost.μ ≈ X_nonlinpost.μ
+    @test Matrix(X_linearpost.Σ) ≈ Matrix(X_nonlinpost.Σ)
+
+    @test X_linearpred.μ ≈ X_nonlinpred.μ
+    @test Matrix(X_linearpred.Σ) ≈ Matrix(X_nonlinpred.Σ)
 end
