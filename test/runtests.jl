@@ -52,7 +52,6 @@ import UnscentedTransforms.add_rcov
     @test add_rcov(Cx.U*C', Cx.U*C').U ≈ cholesky(hermitianpart!(2*C*Sx*C')).U
     @test add_lcov(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
     @test MvGaussian(Px, Cx).Σ.U ≈ cholesky(Sx + Sx).U
-    # Write your tests here.
 end
 
 @testset "State Space" begin

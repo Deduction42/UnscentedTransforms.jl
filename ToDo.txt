@@ -1,6 +1,4 @@
 (1) Prepare for merging into Main 
-    - Add tests to make sure consisten results are obtained (compare with standard Kalman filter)
-    - Clean up unneeded/dead code
     - Add multithreading
 
 (2) Consider more advanced outlier mitigation strategies that properly adust uncertainty

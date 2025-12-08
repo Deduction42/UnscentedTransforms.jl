@@ -138,3 +138,12 @@ function update(obs::NonlinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVect
     return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=Y, K=K)
 end
 
+#Scale the innoviation to avoid chasing outliers
+function scale_innovation(Δy::Real, σy::Real; outlier)
+    if isfinite(outlier)
+        σε = (outlier/3)*σy
+        return asinh(Δy/σε)*σε
+    else
+        return Δy
+    end
+end

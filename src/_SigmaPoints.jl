@@ -273,17 +273,6 @@ function chol_update!(ch::Cholesky, x::Vector, w::Real)
     return w >= 0 ? lowrankupdate!(ch, x) : lowrankdowndate!(ch, x)
 end
 
-
-#Scale the innoviation to avoid chasing outliers
-function scale_innovation(Δy::Real, σy::Real; outlier)
-    if isfinite(outlier)
-        σε = (outlier/3)*σy
-        return asinh(Δy/σε)*σε
-    else
-        return Δy
-    end
-end
-
 std(x::MvGaussian)  = chol_std(x.Σ)
 var(x::MvGaussian)  = chol_var(x.Σ)
 mean(x::MvGaussian) = x.μ
