@@ -1,32 +1,17 @@
-(1) Rename the repo as UnscentedTransforms to adjust the scope
-    - Handling unscented transforms (for error propagation) is a lage part of the API
-    - Unscended Kalman Filter is just a part of this
+(1) Consider more advanced outlier mitigation strategies that properly adust uncertainty
+    -   One strategy is modifying the gain by scalefunc(z[ii]/chol_std(S,ii), cutoff)
+        -   This will propagate this to the uncertainty
+    -   I attempted to adjust the measurement covariance, but this did not yield a monotonic, smooth result for error*gain
 
-(2) Create "AbstractGaussianState" which contains
-    - GaussianState{V::AbstractVector, M::Union{AbstractMatrix,Cholesky}}(x,P)
-        - Object itself is immutable, but for Kalman filtering it should be mutable
-    - UnscentedTransform{V::AbstractVector}(samples)
-    - Create constructors/updators between different kinds of AbstractGaussianState
-        - Will need to define isfinite(AbstractGaussianState) to prevent NaN updates
-    - Supports following functions:
-        - predict!(fxu, x::AbstractGaussianState, u)
-        - addvar!(x::AbstractGaussianState, Q::Union{Cholesky,AbstractMatrix})
-        - updtate!(hxu, x::AbstractGaussianState, u, y::AbstractGaussianState)
-        - view(GaussianState, ind)
-    
-(3) Revamp StateSpaceModel to be more generic (look at the LowLevelParticleFilters API)
-    - StateSpaceModel{TG<:GassianState, TF, TH, TQ, TR}
-        (x::TG, fxu::TF, hxu::TH, Q::TQ, R::TR, θ::SigmaParams)
-    - Cretate two different versions of linear estimator
-        - DiscretizedLinearPredictor (ignores Δt, only stores it)
-        - ContinuousLinearPredictor (uses Δt, keeps it as a ref)
-    - Remove QR decomposition step, as it is an additional allocation. Instead use:
-        - xp = UnscentedTransform(xg)
-        - predict!(fxu, xp, u)
-        - xg = isfinite(xp) ? update!(xg, xp) : xg
-        - addvar!(xg, Q)
-        - update!(xp, xg)
-        - s = kalman_innovation(hxu, xp, u, GaussianState(y))
-            - produces KalmanInnovation(gain, state)
-        - update!(xp, s)
+May want to use this as the scaling function instead of asinh
+This will be identical to the kalman filter until errors have exceeded
 
+using Plots
+using BenchmarkTools
+function scalefunc(z, cutoff=3)
+    rz = abs(z)/cutoff
+    return ifelse(rz<=1, one(rz), (1+log(rz))/rz)
+end
+vx = LinRange(0, 10, 1000)
+vy = vx.*scalefunc.(vx)
+plot(vx, vy)
