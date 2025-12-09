@@ -1,17 +1,1 @@
-(1) Consider more advanced outlier mitigation strategies that properly adust uncertainty
-    -   One strategy is modifying the gain by scalefunc(z[ii]/chol_std(S,ii), cutoff)
-        -   This will propagate this to the uncertainty
-    -   I attempted to adjust the measurement covariance, but this did not yield a monotonic, smooth result for error*gain
-
-May want to use this as the scaling function instead of asinh
-This will be identical to the kalman filter until errors have exceeded
-
-using Plots
-using BenchmarkTools
-function scalefunc(z, cutoff=3)
-    rz = abs(z)/cutoff
-    return ifelse(rz<=1, one(rz), (1+log(rz))/rz)
-end
-vx = LinRange(0, 10, 1000)
-vy = vx.*scalefunc.(vx)
-plot(vx, vy)
+No items in rodamap currently
