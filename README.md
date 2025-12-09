@@ -1,5 +1,5 @@
 # UnscentedTransforms
-A package for propagating Gaussian vectors (GaussianVector) through nonlinear functions and approximating 
+A package for propagating uncertainty (multivariate Gaussian, MvGaussian) through nonlinear functions and approximating 
 uncertainty.
 
 Includes a lightweight implementation of Kalman unscented Kalman filtering with the following features:
@@ -8,3 +8,4 @@ Includes a lightweight implementation of Kalman unscented Kalman filtering with 
 3. Consistent use of the square-root form for improved numerical stability
 4. Automatic observation space reduction to remove non-finite observations
 5. Optinal multithreading if state transition or observation is computationally intensive
+6. Optional outlier suppression scheme for observations
