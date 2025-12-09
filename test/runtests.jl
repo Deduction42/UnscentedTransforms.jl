@@ -1,5 +1,4 @@
 using Revise
-using UnscentedTransforms
 using Test
 using LinearAlgebra
 using StaticArrays
@@ -7,6 +6,7 @@ import Statistics.mean
 import Statistics.cov
 import Random
 
+using UnscentedTransforms
 import UnscentedTransforms.add_cov
 import UnscentedTransforms.add_lcov
 import UnscentedTransforms.add_rcov
