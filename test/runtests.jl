@@ -1,4 +1,3 @@
-using UnscentedTransforms
 using Revise
 using Test
 using LinearAlgebra
@@ -7,6 +6,7 @@ import Statistics.mean
 import Statistics.cov
 import Random
 
+using UnscentedTransforms
 import UnscentedTransforms.add_cov
 import UnscentedTransforms.add_lcov
 import UnscentedTransforms.add_rcov

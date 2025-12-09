@@ -120,13 +120,17 @@ function update(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector,
     (C, D, R, P) = (obs.A, obs.B, obs.Σ, X.Σ)
     yh = C*X.μ .+ D*u
 
-    S = add_lcov(R, C*P.L)
+    S = add_lcov(R, C*P.L) #Innovation covariance
+    Z = MvGaussian(y.-yh, S) #Innovation distribution
     Pxy = (P.L*P.U)*C'#Obtain cross-covariance of state and measurement innovations
     K = (Pxy/S.U)/S.L #Kalman gain
 
-    σz = chol_std(S)
-    μ = X.μ .+ K*scale_innovation.(y.-yh, σz, outlier=outlier)
-    Σ = add_lcov((I-K*C)*P.L, K*R.L)
+    #Scale the gain based off outliers
+    outlier_scaling!(K, Z, outlier)
+
+    #Update the posterior
+    μ = X.μ .+ K*Z.μ
+    Σ = sub_lcov(X.Σ, K*S.L)
 
     return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=MvGaussian(yh, S), K=K)
 end
@@ -139,24 +143,34 @@ function update(obs::NonlinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVect
     #Propagate the sigma points through the predictor
     Yp = predict(obs, Xp, u)
     Y  = MvGaussian(obs.Σ, Yp) #Predicted Y distribution
+    Z  = MvGaussian(y.-Y.μ, Y.Σ) #Innovation distribution
 
-    S   = Y.Σ #Innovation covariance
+    S   = Z.Σ #Innovation covariance
     Pxy = cov(Xp, Yp) #Obtain cross-covariance of state and measurement innovations
     K   = (Pxy/S.U)/S.L #Kalman gain
 
-    σz = chol_std(Y.Σ)
-    μ = X.μ .+ K*scale_innovation.(y.-Y.μ, σz, outlier=outlier)
+    #Scale the gain based off outliers
+    outlier_scaling!(K, Z, outlier)
+
+    #Update the posterior
+    μ = X.μ .+ K*Z.μ
     Σ = sub_lcov(X.Σ, K*S.L)
 
     return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=Y, K=K)
 end
 
-#Scale the innoviation to avoid chasing outliers
-function scale_innovation(Δy::Real, σy::Real; outlier)
-    if isfinite(outlier)
-        σε = (outlier/3)*σy
-        return asinh(Δy/σε)*σε
-    else
-        return Δy
+#Scale the gain based on outlier score of the prediction error distribution ΔY
+function outlier_scaling!(K::AbstractArray, ΔY::MvGaussian, cutoff::Real)
+    for (ii, Δy) in enumerate(ΔY.μ)
+        z = Δy/chol_std(ΔY.Σ, ii)
+        K[:,ii] .= K[:,ii].*outlier_scale(z, cutoff)
     end
+    return K 
+end
+
+#A scaling factor that yields a linear curve for z<=cutoff, and logarithmic for z>=cutoff
+#The curve is continyous up to the 2nd derivative
+function outlier_scale(z::Real, cutoff::Real)
+    rz = abs(z)/cutoff
+    return ifelse(rz<=1, one(rz), (1+log(rz))/rz)
 end

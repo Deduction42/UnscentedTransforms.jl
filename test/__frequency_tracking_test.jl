@@ -22,8 +22,10 @@ import Random
 using Plots; plotlyjs()
 const Δt = 0.1
 
-outlier = 3.0 #Inf
-Random.seed!(1234)
+outlier_suppression = false
+outlier = ifelse(outlier_suppression, 2.0, Inf)
+
+Random.seed!(45678)
 
 ω  = 2π/50
 N  = 1000
@@ -91,7 +93,7 @@ end
 fig = plot(y, lc=:blue, ls=:dot, label="measured")
 plot!(fig, [s.μ[1] for s in vs[1:(end-1)]], label="velocity")
 plot!(fig, [s.μ[2] for s in vs[1:(end-1)]], label="position")
-#png(fig, joinpath(@__DIR__, "outlier cutoff $(outlier)"))
+png(fig, joinpath(@__DIR__, "outlier cutoff $(outlier)"))
 
 #plot([sqrt( min(5*σ, s.x[1]^2/exp(s.x[3])) + s.x[2]^2) for s in vs[1:(end-1)]]) #amplitude-equivalent energy
 
