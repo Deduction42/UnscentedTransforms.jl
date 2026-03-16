@@ -161,7 +161,12 @@ function update(obs::NonlinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVect
 
     #Update the posterior
     μ = X.μ .+ K*Z.μ
-    Σ = sub_lcov(X.Σ, K*S.L)
+    Σ = try
+        sub_lcov(X.Σ, K*S.L)
+    catch err
+        @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
+        X.Σ
+    end
 
     return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=Y, K=K)
 end
