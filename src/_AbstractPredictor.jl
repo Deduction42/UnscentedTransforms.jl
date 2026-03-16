@@ -130,7 +130,14 @@ function update(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector,
 
     #Update the posterior
     μ = X.μ .+ K*Z.μ
-    Σ = sub_lcov(X.Σ, K*S.L)
+
+    #This sometimes fails because rounding error on subtraction makes the matrix "negative", skip if that happens
+    Σ = try
+        sub_lcov(X.Σ, K*S.L)
+    catch err
+        @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
+        X.Σ
+    end
 
     return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=MvGaussian(yh, S), K=K)
 end
