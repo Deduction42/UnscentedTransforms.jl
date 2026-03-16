@@ -1,6 +1,6 @@
 name = "UnscentedTransforms"
 uuid = "fb6c460f-f05e-49c3-9e45-b6a440335337"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Ruben Gonzalez <ruben.carbonbased@gmail.com> and contributors"]
 
 [deps]
