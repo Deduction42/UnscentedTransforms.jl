@@ -135,7 +135,7 @@ function update(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector,
     Σ = try
         sub_lcov(X.Σ, K*S.L)
     catch err
-        @warn "Covariance update failed, skipping this step:\n"*sprint(showerror, err)
+        @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
         X.Σ
     end
 
