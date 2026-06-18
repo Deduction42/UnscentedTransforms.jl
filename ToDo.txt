@@ -1,1 +1,7 @@
-No items in rodamap currently
+1.  Update from current industrial application 
+2.  Add documentation
+3.  Add non square-root form (square root form dispatches from Cholesky)
+4.  Add explicit non-allocating methods from StaticArrays
+    -   This is a good candidate for an extension
+    -   May need to rewrite "lowrankupdate" and "lowrankdowndate" to support StaticArrays
+        I submitted an "issue" on this, if they don't want to add it, I can add it myself
