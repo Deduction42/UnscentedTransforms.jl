@@ -1,1 +1,21 @@
-No items in rodamap currently
+ToDo:
+
+(future)
+1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"
+    -   Kalman filtering functions shouldn't even be automatically exported
+    -   "UvGaussian" should be the old "Measurement" object
+    -   use the "±" notation to construct and display UvGaussian
+    -   convert vectors of UvGaussian to MvGaussian using Cholesky defined by upper-diagonal matrix
+
+2.  Create a new repository called TagMeasurements.jl
+    -   This requires FlexUnits, TimeRecords, UnscentedTransforms as dependencies
+
+    -   Main object "TagMeas{T,D}" and should have the following fields:
+        -   name::String, value::RefValue{T}, stdev::RefValue{T}, reltol::T, abstol::T, units::Units{D, AffineTransform{Float64}},
+                bounds::SVector{2,T}, aggregation::Symbol, history::TimeSeries{T}, indhint::RefValue{Int}
+        -   include "abstol" and "reltol" fields that can be "nan"
+        -   "stdev" should be nanmax(m.abstol + m.reltol*m.value[])
+
+    -   Define the API for AbstractMeas and set "TagMeas" as one of the objects in this hierarchy 
+        -   readhistory!, rawvalue, rawstdev, rawgauss, sivalue, sistdev, sigauss, quantvalue, quantstdev, quantgauss
+
