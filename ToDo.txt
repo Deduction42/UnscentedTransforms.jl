@@ -2,10 +2,26 @@ ToDo:
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"
+    -   "A second-order approximation of uncertainty without dependencies on derivatives"
     -   Kalman filtering functions shouldn't even be automatically exported
     -   "UvGaussian" should be the old "Measurement" object
-    -   use the "±" notation to construct and display UvGaussian
-    -   convert vectors of UvGaussian to MvGaussian using Cholesky defined by upper-diagonal matrix
+        -   "UvGaussian{T<:Real}" shoudl be an "AbstractGaussVar"
+        -   "MvGaussian{V<:AbstractVector, M<:Cholesky}" should be an "AbstractGaussVec"
+        -   Both are the unexported "AbstractGaussian"
+    -   Otherwise keep main points of the Measurements.jl API
+        -   Use the "±" notation to construct and display UvGaussian
+            -   Can also be used to construct MvGaussian
+        -   Use Statistics functions (mean, std, cov) instead of "value" and "uncertainty"
+            -   std and var on MvGaussian produces a vector (maintain the same type as mean)
+        -   Support a modified version of the @uncertain macro
+            -   Unscented transform must be the first argument
+        -   We may need underscore methods to reduce confusion with Statistics 
+            -   For example _std(x::Float64) should be zero (in Statistics, it's NaN)
+    -   Interop between UvGaussian and MvGaussian
+        -   MvGaussian on a vector of UvGaussian produces an MvGaussian with a diagonal Cholesky
+        -   scalar indexing MvGaussian produces UvGaussian
+        -   vector indexing MvGaussian produces a downsampled MvGaussian
+    -   FlexUnits extension
 
 2.  Create a new repository called TagMeasurements.jl
     -   This requires FlexUnits, TimeRecords, UnscentedTransforms as dependencies
