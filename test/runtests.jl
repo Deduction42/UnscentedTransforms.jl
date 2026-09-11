@@ -37,11 +37,12 @@ import UnscentedTransforms.add_rcov
 
     Px  = SigmaPoints(Gx, θ)
     Py  = SigmaPoints(Gy, θ)
-    Pyh = SigmaPoints(points = map(x->C*x, Px.points), weights=Px.weights)
+    Pyh = SigmaPoints(source = map(x->C*x, Px), weights=Px.weights)
 
     #Test round-trip conversion
-    @test MvGaussian(Px).Σ.U ≈ Gx.Σ.U
-    @test MvGaussian(Px).μ ≈ Gx.μ
+    Pxh = SigmaPoints(source = collect(Px), weights=Px.weights)
+    @test MvGaussian(Pxh).Σ.U ≈ Gx.Σ.U
+    @test MvGaussian(Pxh).μ ≈ Gx.μ
 
     #Test adding varainces
     @test cov(Px, Px) ≈ cov(Px)
@@ -51,7 +52,7 @@ import UnscentedTransforms.add_rcov
     @test add_lcov(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
     @test add_rcov(Cx.U*C', Cx.U*C').U ≈ cholesky(hermitianpart!(2*C*Sx*C')).U
     @test add_lcov(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
-    @test MvGaussian(Px, Cx).Σ.U ≈ cholesky(Sx + Sx).U
+    @test MvGaussian(Px, Cx).Σ.U ≈ cholesky(Sx).U
 end
 
 @testset "State Space" begin

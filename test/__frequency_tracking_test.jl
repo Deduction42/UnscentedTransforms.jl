@@ -19,7 +19,7 @@ using UnscentedTransforms
 using StaticArrays
 using LinearAlgebra
 import Random
-using Plots; plotlyjs()
+using Plots#; plotlyjs()
 const Δt = 0.1
 
 outlier_suppression = false
