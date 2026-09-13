@@ -175,7 +175,10 @@ function Base.getindex(points::SigmaPoints{<:AbstractGaussian}, i::Int)
     throw(BoundsError(points, i))
 end
 
-MvGaussian(X::SigmaPoints) = MvGaussian(mean(X), std(X))
+function MvGaussian(X::SigmaPoints) 
+    μ = mean(X)
+    return MvGaussian(μ, std(X, μ))
+end
 
 #======================================================================================================================================
 Math functions
@@ -229,7 +232,6 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
         error("Two sets of sigma points must have the same number of points ($(nx) ≠ $(ny))")
     end
 
-
     (μx, μy) = (mean(X), mean(Y))
     T = promote_type(Float64, eltype(μx), eltype(μy))
     S = zeros(T, length(μx), length(μy))
@@ -241,13 +243,15 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
     return S
 end
 
-function std(X::SigmaPoints{<:AbstractVector}) 
+function std(X::SigmaPoints{<:AbstractVector}, μ::AbstractVector) 
     x0 = X[begin]
     nd = dimlength(X) 
     ch = Cholesky(UpperTriangular(zeros(eltype(x0), nd, nd)))
-    add_cov!(ch, X)
+    add_cov!(ch, X, μ)
     return ch 
 end
+
+std(X::SigmaPoints{<:AbstractVector}) = std(X, mean(X))
 
 std(X::SigmaPoints{<:AbstractGaussian}) = std(X.source)
 
