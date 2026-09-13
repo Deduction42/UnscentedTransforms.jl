@@ -1,20 +1,14 @@
 #======================================================================================================================================
 ToDo:
-
-(1) Don't index X.points[ii], use direct X[ii]
-(2) Define 
-    -   add_cov!(ch::Cholesky, X::SigmaPoints, μ)
-    -   add_cov!(ch::Cholesky, X::SigmaPoints) = add_cov!(ch::Cholesky, X::SigmaPoints, mean(X))
-    -   cholcov(X::SigmaPointsm, μ) = (N = length(μ); add_cov!(Cholesky(UpperTriangular(zeros(N,N))), X, μ)
-    -   MvGaussian(X::SigmaPoints{<:AbstractVector}) = (μ = mean(X); MvGaussian(μ, cholcov(X, μ)))
-(3) SigmaPoints "Source" will start off as a Multivariate Gaussian, but will end up as a vector 
-    -   cholcol/meancol will need to be defined for those objects as well
-    -   A good round-trip test is to see if 
-        MvGaussian(predict(identity, SigmaPoints(d, θ))) ≈ d 
-(4) We will need to consider UvGaussian
+(1) We will need to consider UvGaussian
     -   We will also need to consider multiple arguments to a function such as f(x::UvGaussian, y::UvGaussian) -> z 
     -   This means the "source" is a Tuple{UvGaussian,UvGaussian} which are assumed to be independent
-(5) May want to define "+" for SigmaPoints and MvGaussian/UvGaussian
+    -   Applying "f" to the arguments should produce a static vector (as the number of arguments is known)
+        -   Static vector will be needed to store the resulting points because they're used multiple times
+        -   "std" will need to be different dispatch patterns
+            -   SigmaPoints{<:AbstractVector{<:Number}} => Number
+            -   SigmaPoints{<:AbstractVector{<:AbstractVector}} => Cholesky decomposition
+(2) May want to define "+" for SigmaPoints and MvGaussian/UvGaussian
     -   May want to add type Zero so that MvGaussian{Zero, Cholesky} doesn't need to worry about means
 
 Post cleanup:
