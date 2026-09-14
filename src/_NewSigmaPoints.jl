@@ -13,8 +13,7 @@ ToDo:
 
 Post cleanup:
 (1) Redefine "Σ" as "σ" for MvGaussian covariance field, as the square root form is being used 
-(2) Redefine "add_cov" as "add_std" which is more accurate
-(3) Redefine "add_lcov" as "add_std_left", and "add_rcov" as "add_std_right"
+(2) Redefine add_cov to rsum2, rsum2left, rsum2right
 ======================================================================================================================================#
 
 using LinearAlgebra
@@ -27,9 +26,9 @@ import Statistics.var
 """
 ZeroVec 
 
-Vector of zeros that does not allocate memory, indexing it always returns `false`
+A vector-like object of zeros that does not allocate memory, indexing it always returns `false`
 """
-struct ZeroVec <: AbstractVector{Bool} end 
+struct ZeroVec end 
 Base.getindex(x::ZeroVec, i::Int) = false
 Base.:+(z::ZeroVec, x::AbstractVector) = x 
 Base.:+(x::AbstractVector, z::ZeroVec) = x
@@ -63,11 +62,20 @@ MvGaussian(x, Σ)
 Random vector that follows a Gaussian distribution. 
 If passed a matrix, the constructor automatically takes Cholesky decomposition.
 """
-@kwdef struct MvGaussian{TX<:AbstractVector, TM<:Union{Diagonal,Factorization}} <: AbstractGaussian
+@kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Factorization}} <: AbstractGaussian
     μ :: TX
     Σ :: TM
+    MvGaussian{TX,TM}(x, m) where {TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Factorization}} = new{TX,TM}(x, m)
+    function MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Factorization)
+        cm = cholesky(m)
+        return new{typeof(x), typeof(cm)}(x, m)
+    end
+    function MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Diagonal)
+        return new{typeof(x), typeof(m)}(x, m)
+    end
 end
-MvGaussian(x::AbstractVector, m::AbstractMatrix) = MvGaussian(x, cholesky(m))
+MvGaussian(x::Union{ZeroVec,AbstractVector}, m::AbstractMatrix) = MvGaussian(x, cholesky(m))
+MvGaussian(m::Union{Diagonal,Factorization}) = MvGaussian(ZeroVec(), m)
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.Σ))
 Base.length(MvGaussian) = length(MvGaussian.μ)
@@ -133,11 +141,16 @@ Unscented transform using 2N+1 vectors as points
 Base.@kwdef struct SigmaPoints{S,T} <: AbstractVector{T}
     source   :: S
     weights  :: SigmaWeights
+
     SigmaPoints(source::AbstractGaussian, θ::SigmaWeights) = new{typeof(source), meantype(source)}(source, θ)
-    SigmaPoints(source::AbstractVector, θ::SigmaWeights) = new{typeof(source), eltype(source)}(source, θ)
+
+    function SigmaPoints(source::AbstractVector, θ::SigmaWeights) 
+        Base.require_one_based_indexing(source)
+        return new{typeof(source), eltype(source)}(source, θ)
+    end
 end
 
-SigmaPoints(X::AbstractGaussian, θ::SigmaParams) = SigmaPoints(X, SigmaWeights(length(X), θ))
+SigmaPoints(X, θ::SigmaParams) = SigmaPoints(X, SigmaWeights(dimlength(X), θ))
 
 Base.IndexStyle(::Type{<:SigmaPoints}) = IndexLinear()
 Base.length(x::SigmaPoints{<:AbstractGaussian}) = 2*length(x.source) + 1
@@ -146,6 +159,9 @@ Base.size(x::SigmaPoints) = (length(x),)
 Base.firstindex(x::SigmaPoints) = 1
 Base.lastindex(x::SigmaPoints) = length(x)
 
+halfindex(x::SigmaPoints) = firstindex(x) + dimlength(x)
+dimlength(x::AbstractGaussian) = length(mean(x))
+dimlength(x::UvGaussian) = 1
 dimlength(X::SigmaPoints{<:AbstractGaussian}) = length(X.source)
 dimlength(X::SigmaPoints{<:UvGaussian}) = 1
 dimlength(X::SigmaPoints{<:AbstractVector}) = length(X.source[begin])
@@ -156,14 +172,15 @@ Base.getindex(points::SigmaPoints{<:AbstractVector}, i::Int) = points.source[i]
 #If source is a Gaussian, generate the sigma point
 function Base.getindex(points::SigmaPoints{<:AbstractGaussian}, i::Int)
     μ = meancol(points.source)
-    i == 1 && return μ
+    i == firstindex(points) && return μ
 
     N  = length(points.source)
     rc = sqrt(points.weights.c)
 
-    if 2 <= i <= (N+1)
+    if firstindex(points) < i <= halfindex(points)
         return map((x, Δ)-> x + rc*Δ, μ, cholcol(points.source, i-1))
-    elseif (N+2) <= i <= (2N+1)
+
+    elseif halfindex(points) < i <= lastindex(points)
         return map((x, Δ)-> x - rc*Δ, μ, cholcol(points.source, i-(N+1)))
     end 
     throw(BoundsError(points, i))
@@ -182,11 +199,11 @@ Base.:+(g::UvGaussian, x::Number) = UvGaussian(x + g.μ, g.σ)
 Base.:+(g1::UvGaussian, g2::UvGaussian) = UvGaussian(g1.μ + g2.μ, add_cov(g1.σ, g2.σ))
 Base.:+(g1::MvGaussian, g2::MvGaussian) = MvGaussian(g1.μ + g2.μ, add_cov(g1.Σ, g2.Σ))
 
-function Base.:+(g::MvGaussian, X::SigmaPoints) 
-    μ2 = mean(X)
-    return MvGaussian(mean(g) + μ2, add_cov(g.Σ, X, μ2))
+function Base.:+(X::SigmaPoints, g::MvGaussian) 
+    μx = mean(X)
+    return MvGaussian(mean(g) + μx, add_cov(g.Σ, X, μx))
 end
-Base.:+(X::SigmaPoints, g::MvGaussian) = g + X
+Base.:+(g::MvGaussian, X::SigmaPoints) = g + X
 
 Base.:*(x::Number, g::UvGaussian) = UvGaussian(x*g.μ, x*g.σ)
 Base.:*(g::UvGaussian, x::Number) = UvGaussian(x*g.μ, x*g.σ)
@@ -260,7 +277,7 @@ Helper functions for adding covariances in square root form
 """
 add_cov(σ1, σ2)
 
-Adds square-root form of s1 and s2
+Returns the square-root form of adding covariances
 """
 function add_cov end
 

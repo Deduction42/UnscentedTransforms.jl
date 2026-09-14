@@ -22,7 +22,7 @@ import Random
 using Plots#; plotlyjs()
 const Δt = 0.1
 
-outlier_suppression = false
+outlier_suppression = true
 outlier = ifelse(outlier_suppression, 2.0, Inf)
 
 Random.seed!(45678)
