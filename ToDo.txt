@@ -4,19 +4,15 @@ ToDo:
     -   Can build a "getindex" function for this type of sigma points
     -   Extract mean from each value 
     -   Add/subtract std to the right element according to the index (using @reset from Accessors)
-2.  Create a method "gaussian" that produces a UvGaussian for SigmaPoints{AbstractVector{<:Number}}
+2.  Create a method "gaussian" that produces a 
+        -   UvGaussian for SigmaPoints{AbstractVector{<:Number}}
+        -   MvGaussian for SigmaPoints{AbstractVector{<:AbstractVector}}
     -   If functions produce a scalar, we get a UvGaussian
     -   This doesn't require a chol_update, just add weights times the points and take the square root
-    -   Might end up fusing the point generation and the UvGaussian in a single function
-        p   = f(X[begin]...)
-        m   = wm0*p
-        s   = ws0*p 
-        for i in 2:length(X)
-            xi = X[i]
-            p  = f(xi...)
-            m  = m + wm*p
-            s  = s + ws*p
-        end
+    -   Either way we still need vector form SigmaPoints 
+        -   We need to calculate its mean before doing the standard deviation
+        -   This means every sigma point gets used twice (so we need to store it in memory)
+        -   The UvGaussian function arguments can produce an SVector{2*N+1}
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"
