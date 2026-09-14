@@ -17,6 +17,7 @@ Post cleanup:
 ======================================================================================================================================#
 
 using LinearAlgebra
+using Accessors
 import Statistics.mean
 import Statistics.cov
 import Statistics.std
@@ -178,10 +179,30 @@ function Base.getindex(points::SigmaPoints{<:AbstractGaussian}, i::Int)
     rc = sqrt(points.weights.c)
 
     if firstindex(points) < i <= halfindex(points)
-        return map((x, Δ)-> x + rc*Δ, μ, cholcol(points.source, i-1))
+        ic = i-1
+        return map((x, Δ)-> x + rc*Δ, μ, cholcol(points.source, ic))
 
     elseif halfindex(points) < i <= lastindex(points)
-        return map((x, Δ)-> x - rc*Δ, μ, cholcol(points.source, i-(N+1)))
+        ic =  i-(N+1)
+        return map((x, Δ)-> x - rc*Δ, μ, cholcol(points.source, ic))
+    end 
+    throw(BoundsError(points, i))
+end
+
+#If the source is a tuple of UvGaussians, generate the sigma point
+function Base.getindex(points::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}, i::Int)
+    μ = map(mean, points.source)
+    i == firstindex(points) && return μ
+
+    N  = length(points.source)
+    rc = sqrt(points.weights.c)
+
+    if firstindex(points) < i <= halfindex(points)
+        iμ = i-1
+        return @set μ[iμ] = μ[iμ] + rc*std(points.source[iμ])
+    elseif halfindex(points) < i <= lastindex(points)
+        iμ = i-(N+1)
+        return @set μ[iμ] = μ[iμ] - rc*std(points.source[iμ])
     end 
     throw(BoundsError(points, i))
 end
@@ -190,6 +211,16 @@ function MvGaussian(X::SigmaPoints)
     μ = mean(X)
     return MvGaussian(μ, std(X, μ))
 end
+
+function UvGaussian(x::SigmaPoints)
+    μ = mean(X)
+    return UvGaussian(x::SigmaPoints, xtd(X, μ))
+end
+
+#Dispatch patterns for generic function
+gaussian(x::SigmaPoints{<:AbstractVector{<:AbstractVector}}) = MvGaussian(x)
+gaussian(x::SigmaPoints{<:AbstractVector{<:Number}}) = UvGaussian(x)
+gaussian(x::SigmaPoints{<:AbstractGaussian}) = x.source
 
 #======================================================================================================================================
 Math functions
@@ -212,23 +243,44 @@ Base.:*(g::MvGaussian{<:Cholesky}, x::Number) = MvGaussian(x*g.μ, Cholesky(x*g.
 Base.:*(x::Number, g::MvGaussian{<:Diagonal}) = MvGaussian(x*g.μ, x*g.Σ)
 Base.:*(g::MvGaussian{<:Diagonal}, x::Number) = MvGaussian(x*g.μ, x*g.Σ)
 
+predict(f, θ::SigmaParams, args::UvGaussian...) = predict(f, SigmaWeights(length(args), θ), args...)
+
+function predict(f, θ::SigmaWeights, args::UvGaussian...)
+    Np = 2*length(args) + 1
+    
+    old_points = SigmaPoints(args, θ)
+    indvec = SVector{Np}(firstindex(old_points):lastindex(old_points))
+    new_points = map(ind->f(old_points[ind]...), indvec) #Non-allocating result
+
+    return gaussian(new_points)
+end
+
 #======================================================================================================================================
 Stats functions
 ======================================================================================================================================#
 function mean(X::SigmaPoints{<:AbstractVector})
-    wμ = X.weights.μ
-    μ = wμ[1].*X[begin]
+    (w0, w1) = X.weights.μ
+    μ = w0.*X[begin]
     outer_inds = (firstindex(X)+1):lastindex(X)
 
     if ismutable(μ)
         for ind in outer_inds
-            μ .+= wμ[2].*X[ind]
+            μ .+= w1.*X[ind]
         end
         return μ
     else
-        return sum(ind-> wμ[2].*X[ind], outer_inds, init=μ)
+        return sum(ind-> w1.*X[ind], outer_inds, init=μ)
     end
 end
+
+function mean(X::SigmaPoints{<:AbstractVector{<:Number}}) 
+    (w0, w1) = X.weights.μ
+    μ = w0*X[begin]
+    outer_inds = (firstindex(X)+1):lastindex(X)
+
+    return sum(ind-> w1*X[ind], outer_inds, init=μ)
+end
+
 
 mean(X::SigmaPoints{<:AbstractGaussian}) = mean(X.source)
 
@@ -254,7 +306,7 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
     return S
 end
 
-function std(X::SigmaPoints{<:AbstractVector}, μ::AbstractVector) 
+function std(X::SigmaPoints{<:AbstractVector{<:AbstractVector}}, μ::AbstractVector) 
     x0 = X[begin]
     nd = dimlength(X) 
     ch = Cholesky(UpperTriangular(zeros(eltype(x0), nd, nd)))
@@ -262,8 +314,15 @@ function std(X::SigmaPoints{<:AbstractVector}, μ::AbstractVector)
     return ch 
 end
 
-std(X::SigmaPoints{<:AbstractVector}) = std(X, mean(X))
+function std(X::SigmaPoints{<:AbstractVector{<:Number}}, μ::Number) 
+    (w0, w1) = (X.weights.Σ[1], X.weights.Σ[2])
 
+    σ² = sum(x-> w1*(x-μ)^2, X[(begin+1):end]) #Off-center weights
+    return sqrt(σ² + w0*(X[begin]-μ)^2) #Center weights
+end
+
+
+std(X::SigmaPoints{<:AbstractVector}) = std(X, mean(X))
 std(X::SigmaPoints{<:AbstractGaussian}) = std(X.source)
 
 function cov(x::SigmaPoints)
