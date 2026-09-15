@@ -20,8 +20,12 @@ ToDo:
         x*y, sin(x), cos(x), exp(x)
     -   Asymptotic functions should have alpha scaled such that it doesn't go too close to zero 
         -   Obtain relative distance of asymptote based off standard deviation 
-            -   stdist(g::UvGausian, x0) = abs(x0 - g.μ)/g.σ 
-            -   you want to constrain alpha so that none of the sigma points are within 0.5*stdist(g, x0) of an asymptote 
+            -   z = stdist(g::UvGausian, x0) = abs(x0 - g.μ)/g.σ 
+                -   This is a hard limit that you might want to shrink a bit more
+                    -   By a factor of close to 1 when z is near zero
+                    -   By a factor of close to 0.5 if z is further from zero
+                    -   scale(z) = (0.5 + 0.5/(z+1)) = (1 + inv(z+1))/2
+                    -   adjusted(z) = scale(z)*z
             -   for multivariate distributions, 
                 -   Select the maximum value of each column of L as the standard deviation
                 -   Find the minimum absolute standard distance (zmin) in all dimensions for all asymptotes
