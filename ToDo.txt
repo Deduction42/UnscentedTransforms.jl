@@ -19,15 +19,20 @@ ToDo:
     -   Non-asymptotic functions should have alpha=1
         x*y, sin(x), cos(x), exp(x)
     -   Asymptotic functions should have alpha scaled such that it doesn't go too close to zero 
-        -   Locate the nearest asymptote and designate it as an upper or lower bound
-        -   The lower bound should be LB + max(1, (mu-LB)/sig)
-            -   If the asymptote is at 0 x has mean of 0.1 and std of 2.0, the lower bound should be 0.05
-        -   The upper bound should be UB - max(1, (UB-mu)/sig)
+        -   Obtain relative distance of asymptote based off standard deviation 
+            -   stdist(g::UvGausian, x0) = abs(x0 - g.μ)/g.σ 
+            -   you want to constrain alpha so that none of the sigma points are within 0.5*stdist(g, x0) of an asymptote 
+            -   for multivariate distributions, 
+                -   Select the maximum value of each column of L as the standard deviation
+                -   Find the minimum absolute standard distance (zmin) in all dimensions for all asymptotes
+            -   scale alpha so that it is one, or so that zmin > α*sqrt(L+κ) 
+                -   α = min(1, sqrt(zmin/sqrt(L+κ)))
         -   Each function should have an "asymptote" function with it 
-            -   asymptotes(typeof(inv), UvGaussian) = 0 #Check scaling against a single asymptote
-            -   asymptotes(typeof(sin), UvGaussian) = nothing
-            -   asymptotes(typeof(asin), UvGausian) = (0,1) #check all scaling and return minimum
-        -   scale_asymptote(x::UvGaussian, z)
+            -   asymptotes(Function) = () #No need to check scaling
+            -   asymptotes(typeof(inv)) = (0,) #Check scaling against a single asymptote
+            -   asymptotes(typeof(asin)) = (0,1) #check all scaling and return minimum
+        -   scale_asymptote(x::Number, g::UvGaussian)
+        -   scale_asymptote(f::Function, g::UvGaussian) = min(Inf, map(g->scale_asymptote(g, x), asymptotes(f))...) 
     -   
     -   inv(x) must have sigma points that don't go more than halfway to zero (alpha can be 1 but can be less)
     -   x/y should be x*inv(y)
