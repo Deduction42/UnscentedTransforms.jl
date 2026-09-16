@@ -12,6 +12,20 @@ function Base.:+(X::SigmaPoints, g::MvGaussian)
 end
 Base.:+(g::MvGaussian, X::SigmaPoints) = g + X
 
+Base.:-(v::ZeroVec) = v
+Base.:-(g::UvGaussian) = UvGaussian(-g.μ, g.σ)
+Base.:-(g::MvGaussian) = MvGaussian(-g.μ, g.Σ)
+Base.:-(x::Number, g::UvGaussian) = UvGaussian(x - g.μ, g.σ)
+Base.:-(g::UvGaussian, x::Number) = UvGaussian(x - g.μ, g.σ)
+Base.:-(g1::UvGaussian, g2::UvGaussian) = UvGaussian(g1.μ - g2.μ, add_cov(g1.σ, g2.σ))
+Base.:-(g1::MvGaussian, g2::MvGaussian) = MvGaussian(g1.μ - g2.μ, add_cov(g1.Σ, g2.Σ))
+
+function Base.:-(X::SigmaPoints, g::MvGaussian) 
+    μx = mean(X)
+    return MvGaussian(mean(g) - μx, add_cov(g.Σ, X, μx))
+end
+Base.:-(g::MvGaussian, X::SigmaPoints) = g - X
+
 Base.:*(x::Number, g::UvGaussian) = UvGaussian(x*g.μ, x*g.σ)
 Base.:*(g::UvGaussian, x::Number) = UvGaussian(x*g.μ, x*g.σ)
 Base.:*(x::Number, g::MvGaussian{<:Cholesky}) = MvGaussian(x*g.μ, Cholesky(x*g.Σ.U))
@@ -110,7 +124,7 @@ function _min_scale_deviation(current::Number, g::MvGaussian, limit::AbstractVec
     return current 
 end
 
-function _min_scale_deviation(current::Number, gs::Tuple{<:Vararg{<:UvGaussian}}, limits::Tuple{<:Vararg{<:Number}})
+function _min_scale_deviation(current::Number, gs::Tuple{Vararg{<:UvGaussian}}, limits::Tuple{Vararg{<:Number}})
     length(gs) == length(limits) || error("Inputs must be same-length Tuples of UvGaussian and Number, recieved $(gs) and $(limits)")
 
     for i in eachindex(gs)
