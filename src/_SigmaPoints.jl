@@ -40,15 +40,32 @@ Base.:-(x::AbstractVector, z::ZeroVec) = x
 abstract type AbstractGaussian end
 
 """
-UvGaussian(x, Σ)
+gaussian(μ, σ)
 
-Random value that follows a Gaussian distribution. 
-If passed a matrix, the constructor automatically takes Cholesky decomposition.
+Build a Gaussian object from mean μ, uncertainty σ. If both μ and σ are numbers, a univariate Gaussian is constructed.
+If μ is a vector and σ is a triangular or diagonal matrix, it is assumed to be square root form, otherwise a cholesky decomposition is performed
+"""
+function gaussian end 
+
+"""
+±(μ, σ)
+
+Produces a Gaussian uncertainty object. If μ is a vector and σ is a matrix/factorization, a multivariate distribution is built
+"""
+±(μ, σ) = gaussian(μ, σ)
+
+"""
+UvGaussian(x, σ)
+
+An uncertaint value with uncertainty that, by default, is assumed to follow a Gaussian distribution
 """
 @kwdef struct UvGaussian{T} <: AbstractGaussian
     μ :: T
     σ :: T
 end
+UvGaussian(μ::T1, σ::T2) where {T1,T2} = UvGaussian{promote_type(T1,T2)}(μ, σ)
+gaussian(μ::Number, σ::Number) = UvGaussian(μ, σ)
+
 Base.length(x::UvGaussian) = 1
 meantype(x::UvGaussian) = typeof(x.μ)
 
@@ -60,8 +77,9 @@ meancol(x::UvGaussian) = x.μ
 """
 MvGaussian(x, Σ)
 
-Random vector that follows a Gaussian distribution. 
-If passed a matrix, the constructor automatically takes Cholesky decomposition.
+An uncertaint vector that by default, is assumed to follow a Gaussian distribution. The uncertainty in this object
+takes the square-root form. Diagonal and triangular matrices are already assumed to be in square root form. Otherwise 
+the constructor performs a cholesky decomposition.
 """
 @kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Factorization}} <: AbstractGaussian
     μ :: TX
@@ -76,7 +94,9 @@ If passed a matrix, the constructor automatically takes Cholesky decomposition.
     end
 end
 MvGaussian(x::Union{ZeroVec,AbstractVector}, m::AbstractMatrix) = MvGaussian(x, cholesky(m))
+MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Union{LowerTriangular,UpperTriangular}) = MvGaussian(x, Cholesky(m))
 MvGaussian(m::Union{Diagonal,Factorization}) = MvGaussian(ZeroVec(), m)
+gaussian(μ::AbstractVector, σ::Union{Factorization, AbstractMatrix}) = MvGaussian(μ, σ)
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.Σ))
 Base.length(MvGaussian) = length(MvGaussian.μ)
