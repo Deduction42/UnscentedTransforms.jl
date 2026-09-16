@@ -1,46 +1,26 @@
 ToDo:
-1.  SigmaPoint{Tuple{UvGaussian...}} is another type of SigmaPoints
-    -   Tuple must consist of UvGaussian
-    -   Can build a "getindex" function for this type of sigma points
-    -   Extract mean from each value 
-    -   Add/subtract std to the right element according to the index (using @reset from Accessors)
-2.  Create a method "gaussian" that produces a 
-        -   UvGaussian for SigmaPoints{AbstractVector{<:Number}}
-        -   MvGaussian for SigmaPoints{AbstractVector{<:AbstractVector}}
-    -   If functions produce a scalar, we get a UvGaussian
-    -   This doesn't require a chol_update, just add weights times the points and take the square root
-    -   Either way we still need vector form SigmaPoints 
-        -   We need to calculate its mean before doing the standard deviation
-        -   This means every sigma point gets used twice (so we need to store it in memory)
-        -   The UvGaussian function arguments can produce an SVector{2*N+1}
-3.  Univariate sigma point ops on known functions can use pre-canned parameters
-    -   This is a good resource to verify other scaling rules
-        -   https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
-    -   Non-asymptotic functions should have alpha=1
-        x*y, sin(x), cos(x), exp(x)
-    -   Asymptotic functions should have alpha scaled such that it doesn't go too close to zero 
-        -   Obtain relative distance of asymptote based off standard deviation 
-            -   z = stdist(g::UvGausian, x0) = abs(x0 - g.μ)/g.σ 
-                -   This is a hard limit that you might want to shrink a bit more
-                    -   By a factor of close to 1 when z is near zero
-                    -   By a factor of close to 0.5 if z is further from zero
-                    -   scale(z) = (0.5 + 0.5/(z+1)) = (1 + inv(z+1))/2
-                    -   adjusted(z) = scale(z)*z
-            -   for multivariate distributions, 
-                -   Select the maximum value of each column of L as the standard deviation
-                -   Find the minimum absolute standard distance (zmin) in all dimensions for all asymptotes
-            -   scale alpha so that it is one, or so that zmin > α*sqrt(L+κ) 
-                -   α = min(1, sqrt(zmin/sqrt(L+κ)))
-        -   Each function should have an "asymptote" function with it 
-            -   asymptotes(Function) = () #No need to check scaling
-            -   asymptotes(typeof(inv)) = (0,) #Check scaling against a single asymptote
-            -   asymptotes(typeof(asin)) = (0,1) #check all scaling and return minimum
-        -   scale_asymptote(x::Number, g::UvGaussian)
-        -   scale_asymptote(f::Function, g::UvGaussian) = min(Inf, map(g->scale_asymptote(g, x), asymptotes(f))...) 
-    -   
-    -   inv(x) must have sigma points that don't go more than halfway to zero (alpha can be 1 but can be less)
-    -   x/y should be x*inv(y)
-    -   tan(x) should be sin(x)*inv(cos(x))
+1.  Redefine the SigmaPoints and SigmaWeights parameterizations
+    -   SigmaWeights should store some of the original SigmaParams object and the Dimension
+        L  = L
+        α² = abs2(θ.α)
+        κ  = θ.κ
+        β  = θ.β
+        c  = α²*(L+κ)
+        Wn = 0.5/c 
+        Wμ = 1 - L/c
+        Wσ = Wμ + 1 - α² + β
+        (verify consistency with old parametrization method)
+
+    -   rc2 = scale_step(sqrt(c)) uses the current sqrt(c) parameter. Test the result using 
+        ϕ = abs2(rc2)/w.c, if this is not 1, use ϕ to modify SigmaWeights as follows:
+        
+        @reset w.c  = ϕ*w.c
+        @reset w.α² = ϕ*w.α²
+        @reset w.Wn = 0.5/w.c 
+        @reset w.Wμ = 1 - w.L/w.c 
+        @reset w.Wσ = w.Wμ + 1 - w.α² + w.β
+
+
 
 
 (future)

@@ -1,24 +1,24 @@
 #======================================================================================================================================
 Math functions
 ======================================================================================================================================#
-Base.:+(x::Number, g::UvGaussian) = UvGaussian(x + g.μ, g.σ)
-Base.:+(g::UvGaussian, x::Number) = UvGaussian(x + g.μ, g.σ)
-Base.:+(g1::UvGaussian, g2::UvGaussian) = UvGaussian(g1.μ + g2.μ, add_cov(g1.σ, g2.σ))
-Base.:+(g1::MvGaussian, g2::MvGaussian) = MvGaussian(g1.μ + g2.μ, add_cov(g1.Σ, g2.Σ))
+Base.:+(x::Number, g::UvGaussian) = UvGaussian(x + mean(g), std(g))
+Base.:+(g::UvGaussian, x::Number) = UvGaussian(x + mean(g), std(g))
+Base.:+(g1::UvGaussian, g2::UvGaussian) = UvGaussian(mean(g1) + mean(g2), add_cov(std(g1), std(g2)))
+Base.:+(g1::MvGaussian, g2::MvGaussian) = MvGaussian(mean(g1) + mean(g2), add_cov(std(g1), std(g2)))
 
 function Base.:+(X::SigmaPoints, g::MvGaussian) 
     μx = mean(X)
-    return MvGaussian(mean(g) + μx, add_cov(g.Σ, X, μx))
+    return MvGaussian(mean(g) + μx, add_cov(std(g), X, μx))
 end
 Base.:+(g::MvGaussian, X::SigmaPoints) = g + X
 
 Base.:-(v::ZeroVec) = v
-Base.:-(g::UvGaussian) = UvGaussian(-g.μ, g.σ)
-Base.:-(g::MvGaussian) = MvGaussian(-g.μ, g.Σ)
-Base.:-(x::Number, g::UvGaussian) = UvGaussian(x - g.μ, g.σ)
-Base.:-(g::UvGaussian, x::Number) = UvGaussian(x - g.μ, g.σ)
-Base.:-(g1::UvGaussian, g2::UvGaussian) = UvGaussian(g1.μ - g2.μ, add_cov(g1.σ, g2.σ))
-Base.:-(g1::MvGaussian, g2::MvGaussian) = MvGaussian(g1.μ - g2.μ, add_cov(g1.Σ, g2.Σ))
+Base.:-(g::UvGaussian) = UvGaussian(-mean(g), std(g))
+Base.:-(g::MvGaussian) = MvGaussian(-mean(g), std(g))
+Base.:-(x::Number, g::UvGaussian) = UvGaussian(x - mean(g), std(g))
+Base.:-(g::UvGaussian, x::Number) = UvGaussian(x - mean(g), std(g))
+Base.:-(g1::UvGaussian, g2::UvGaussian) = UvGaussian(mean(g1) - mean(g2), add_cov(std(g1), std(g2)))
+Base.:-(g1::MvGaussian, g2::MvGaussian) = MvGaussian(mean(g1) - mean(g2), add_cov(std(g1), std(g2)))
 
 function Base.:-(X::SigmaPoints, g::MvGaussian) 
     μx = mean(X)
@@ -26,12 +26,12 @@ function Base.:-(X::SigmaPoints, g::MvGaussian)
 end
 Base.:-(g::MvGaussian, X::SigmaPoints) = g - X
 
-Base.:*(x::Number, g::UvGaussian) = UvGaussian(x*g.μ, x*g.σ)
-Base.:*(g::UvGaussian, x::Number) = UvGaussian(x*g.μ, x*g.σ)
-Base.:*(x::Number, g::MvGaussian{<:Cholesky}) = MvGaussian(x*g.μ, Cholesky(x*g.Σ.U))
-Base.:*(g::MvGaussian{<:Cholesky}, x::Number) = MvGaussian(x*g.μ, Cholesky(x*g.Σ.U))
-Base.:*(x::Number, g::MvGaussian{<:Diagonal}) = MvGaussian(x*g.μ, x*g.Σ)
-Base.:*(g::MvGaussian{<:Diagonal}, x::Number) = MvGaussian(x*g.μ, x*g.Σ)
+Base.:*(x::Number, g::UvGaussian) = UvGaussian(x*mean(g), x*std(g))
+Base.:*(g::UvGaussian, x::Number) = UvGaussian(x*mean(g), x*std(g))
+Base.:*(x::Number, g::MvGaussian{<:Cholesky}) = MvGaussian(x*mean(g), Cholesky(x*std(g).U))
+Base.:*(g::MvGaussian{<:Cholesky}, x::Number) = MvGaussian(x*mean(g), Cholesky(x*std(g).U))
+Base.:*(x::Number, g::MvGaussian{<:Diagonal}) = MvGaussian(x*mean(g), x*std(g))
+Base.:*(g::MvGaussian{<:Diagonal}, x::Number) = MvGaussian(x*mean(g), x*std(g))
 
 predict(f, θ::SigmaParams, args::UvGaussian...) = predict(f, SigmaWeights(length(args), θ), args...)
 
@@ -99,9 +99,8 @@ discontinuities(f::typeof(inv)) = (0,)
 discontinuities(f::typeof(asin)) = (0,1)
 discontinuities(f::typeof(acos)) = (0,1)
 
-function select_alpha(f, gs::AbstractGaussian...)
-    current = 1.0
-    
+
+function scale_step(f, current::Number, gs::AbstractGaussian...)    
     limits = discontinuities(f)
     (limits isa Tuple) || error("discontinuities($(f)) must return a tuple, instead it returned $(limits)")
 
@@ -109,7 +108,7 @@ function select_alpha(f, gs::AbstractGaussian...)
         current = _min_scale_deviation(current, g, lim)
     end
 
-    return current 
+    return current
 end
 
 function _min_scale_deviation(current::Number, g::MvGaussian, limit::AbstractVector)

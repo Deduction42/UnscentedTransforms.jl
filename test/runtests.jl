@@ -2,14 +2,25 @@ using Revise
 using Test
 using LinearAlgebra
 using StaticArrays
-import Statistics.mean
-import Statistics.cov
+using Statistics
 import Random
 
 using UnscentedTransforms
 import UnscentedTransforms.add_cov
 import UnscentedTransforms.add_lcov
 import UnscentedTransforms.add_rcov
+
+@testset "Basic Math" begin
+    (μ1, σ1) = (0.1, 1.0)
+    (μ2, σ2) = (1.0, 0.1)
+    x1 = μ1 ± σ1 
+    x2 = μ2 ± σ2
+
+    @test (x1 + x2) == UvGaussian(μ1 + μ2, sqrt(σ1^2 + σ2^2))
+    @test (x1 - x2) == UvGaussian(μ1 - μ2, sqrt(σ1^2 + σ2^2))
+    @test 2*x1 == UvGaussian(μ1*2, σ1*2)
+    @test x1*2 == UvGaussian(μ1*2, σ1*2)
+end
 
 @testset "Sigma Points" begin
     Random.seed!(1234)

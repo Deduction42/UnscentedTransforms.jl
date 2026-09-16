@@ -1,22 +1,18 @@
 #======================================================================================================================================
 ToDo:
-(1) We will need to consider UvGaussian
-    -   We will also need to consider multiple arguments to a function such as f(x::UvGaussian, y::UvGaussian) -> z 
-    -   This means the "source" is a Tuple{UvGaussian,UvGaussian} which are assumed to be independent
-    -   Applying "f" to the arguments should produce a static vector (as the number of arguments is known)
-        -   Static vector will be needed to store the resulting points because they're used multiple times
-        -   "std" will need to be different dispatch patterns
-            -   SigmaPoints{<:AbstractVector{<:Number}} => Number
-            -   SigmaPoints{<:AbstractVector{<:AbstractVector}} => Cholesky decomposition
-(2) May want to define "+" for SigmaPoints and MvGaussian/UvGaussian
-    -   May want to add type Zero so that MvGaussian{Zero, Cholesky} doesn't need to worry about means
+
 
 Post cleanup:
 (1) Redefine "Σ" as "σ" for MvGaussian covariance field, as the square root form is being used 
 (2) Redefine add_cov to sqrtadd2, sqrtadd2left, sqrtadd2right
+
+
+-   This is a good resource to verify other scaling rules
+    https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
 ======================================================================================================================================#
 
 using LinearAlgebra
+using StaticArrays
 using Accessors
 import Statistics.mean
 import Statistics.cov
@@ -71,6 +67,7 @@ meantype(x::UvGaussian) = typeof(x.μ)
 
 mean(x::UvGaussian) = x.μ
 std(x::UvGaussian) = x.σ
+var(x::UvGaussian) = abs2(x.σ)
 cholcol(x::UvGaussian, i::Integer) = x.σ[i]
 meancol(x::UvGaussian) = x.μ
 
@@ -97,6 +94,9 @@ MvGaussian(x::Union{ZeroVec,AbstractVector}, m::AbstractMatrix) = MvGaussian(x, 
 MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Union{LowerTriangular,UpperTriangular}) = MvGaussian(x, Cholesky(m))
 MvGaussian(m::Union{Diagonal,Factorization}) = MvGaussian(ZeroVec(), m)
 gaussian(μ::AbstractVector, σ::Union{Factorization, AbstractMatrix}) = MvGaussian(μ, σ)
+
+MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(SVector(map(std, args))))
+MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.Σ))
 Base.length(MvGaussian) = length(MvGaussian.μ)
@@ -155,7 +155,7 @@ function SigmaWeights(L::Int64, θ::SigmaParams=SigmaParams())
     α = θ.α
     κ = θ.κ
     β = θ.β
-
+    
     λ  = α^2*(L+κ)-L                          #scaling factor
     c  = L + λ                                #scaling factor
     Wn = 0.5/c
@@ -362,7 +362,7 @@ function add_cov!(ch::Cholesky, X::SigmaPoints, μ::AbstractVector)
 end
 
 add_cov(ch1::Cholesky, ch2::Cholesky) = add_cov!(copy(ch1), ch2)
-add_cov(x1::Number, x2::Number) = sqrt(abs(x1) + abs(x2))
+add_cov(x1::Number, x2::Number) = sqrt(abs2(x1) + abs2(x2))
 
 
 function add_cov!(ch1::Cholesky, ch2::Cholesky)
