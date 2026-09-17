@@ -1,26 +1,12 @@
 ToDo:
-1.  Redefine the SigmaPoints and SigmaWeights parameterizations
-    -   SigmaWeights should store some of the original SigmaParams object and the Dimension
-        L  = L
-        α² = abs2(θ.α)
-        κ  = θ.κ
-        β  = θ.β
-        c  = α²*(L+κ)
-        Wn = 0.5/c 
-        Wμ = 1 - L/c
-        Wσ = Wμ + 1 - α² + β
-        (verify consistency with old parametrization method)
+1.  Test this repo on an existing project (create a new test branch) to verify speed and accuracy (no additional thresholding yet)
 
-    -   rc2 = scale_step(sqrt(c)) uses the current sqrt(c) parameter. Test the result using 
-        ϕ = abs2(rc2)/w.c, if this is not 1, use ϕ to modify SigmaWeights as follows:
-        
-        @reset w.c  = ϕ*w.c
-        @reset w.α² = ϕ*w.α²
-        @reset w.Wn = 0.5/w.c 
-        @reset w.Wμ = 1 - w.L/w.c 
-        @reset w.Wσ = w.Wμ + 1 - w.α² + w.β
+2.  Test scaling rules more rigorously (such as invprod3(x::SVector{3})) to ensure none of the sigma points cross the threshold
 
+3.  Extend `gaussian(f, weights, args...)` on all argument types and build scaling rules more deeply into the UKF
+    -   This also means that domainlimits(f::innerfunc) needs to be specified, or that we need to pass ArgLimits arguments
 
+4.  Validate updated UKF in the same existing project and verify results
 
 
 (future)

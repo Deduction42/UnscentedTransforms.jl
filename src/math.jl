@@ -46,6 +46,41 @@ function gaussian(f, θ::SigmaWeights, args::UvGaussian...)
     return gaussian(new_points)
 end
 
+struct ArgLimits{N,T} 
+    list :: NTuple{N,T}
+    ArgLimits{N,T}(args...) where {N,T} = new{N,T}(args)
+end
+
+ArgLimits() = ArgLimits{0,Nothing}()
+
+function ArgLimits(arg1, argN...)
+    args = (arg1, argN...)
+    allequal(length, args) || throw(ArgumentError("All limit arguments must have the same length, received $(args)"))
+
+    N = length(args)
+    T = promote_type(map(typeof, args)...)
+    return ArgLimits{N,T}(arg1, argN...)
+end
+
+function ArgLimits(arg1::Tuple, argN::Tuple...)
+    args = (arg1, argN...)
+    allequal(length, args) || throw(ArgumentError("All limit arguments must have the same length, received $(args)"))
+    argtypes = map(typeof, args)
+
+    N = length(args)
+    T = reduce(_promote_fieldtypes, argtypes)
+
+    return ArgLimits{N,T}(arg1, argN...)
+end
+
+function _promote_fieldtypes(::Type{T1}, ::Type{T2}) where {N, T1<:Tuple{Vararg{<:Any,N}}, T2<:Tuple{Vararg{<:Any,N}}} 
+    T = map(promote_type, fieldtypes(T1), fieldtypes(T2))
+    return Tuple{T...}
+end
+
+Base.first(limits::ArgLimits{N,T}) where {N,T} = first(limits.list)
+Base.tail(limits::ArgLimits{N,T}) where {N,T} = ArgLimits{N-1,T}(Base.tail(limits.list)...)
+
 """
 domainlimits(f::Function)
 
@@ -55,22 +90,23 @@ Specifies any domain values in "f" that a distribution should not cross.
 -   This could also pertain to an asymptote like 0 for inv(x) 
     Well-behaved cases must have the same sign as the mean, zero-crossing behaviour is ill-defined
 
-This function must produce a tuple of domainlimits. The default value is an empty tuple (no limits).
+This function must produce an `ArgLimits` object, where each argument `ArgLimits(args...)` represents a limit. 
+For functions with multiple arguments, each value in `args` must be a Tuple. 
+The default for functions is `domainlimits(f::Function) = ArgLimits()`. 
 If this is incorrect, users will need to define a lower-level dispatch to produce limits for their function.
-    `domainlimits(f::Function) = ()`
 
 Examples:
 
 (1) For a single-argument function with a single discontinuitiy at zero (like inv) you would want 
 
     ```
-    domainlimits(f::typeof(inv)) = (0,)
+    domainlimits(f::typeof(inv)) = ArgLimits(0)
     ```
 
 (2) For a single-argument function with two discontinuties (like asin at 0 and 1), you would want 
 
     ```
-    domainlimits(f::typeof(asin)) = (0,1)
+    domainlimits(f::typeof(asin)) = ArgLimits(0,1)
     ```
 
 (3) For a vector-argument function with a single discontinuity, return a tuple of a vector. If any element 
@@ -78,29 +114,29 @@ Examples:
 
     ```
     vecdiv(x) = x[1]/x[2]
-    domainlimits(typeof(vecdiv)) = ([NaN,0], )
+    domainlimits(typeof(vecdiv)) = ArgLimits([NaN,0])
     ```
 
 (4) For a two-argument function with a single disonctinuity, use a non-finite number for any argument that doesn't matter.
 
     ```
     mydiv(x,y) = x/y
-    domainlimits(f::typeof(mydiv)) = ((NaN, 0),)
+    domainlimits(f::typeof(mydiv)) = ArgLimits((NaN, 0))
     ```
 
 (5) Currently, only "box domainlimits" are supported, which means that you can lump multiple domainlimits in a single object 
 
     ```
     invmul(x,y) = inv(x*y)`
-    domainlimits(f::typeof(invmul)) = ((0,0),)
+    domainlimits(f::typeof(invmul)) = ArgLimits((0,0))
     ```
 
 (6) Box discontinuitieis also means can also repeat domainlimits or place NaN if that argument's discontinuity is already taken care of
 
     ```
     myfunc(x,y) = log(x*asin(y))
-    domainlimits(f::typeof(myfunc)) = ((0,0), (NaN,1)) #This is valid
-    domainlimits(f::typeof(myfunc)) = ((0,0), (0,1)) #This expresses the same thing
+    domainlimits(f::typeof(myfunc)) = ArgLimits((0,0), (NaN,1)) #This is valid
+    domainlimits(f::typeof(myfunc)) = ArgLimits((0,0), (0,1)) #This expresses the same result
     ```
 
 (7) Multidimensional domainlimits that do not line up with dimensional axes are currently unsupported. We cannot currently guarantee 
@@ -114,14 +150,14 @@ Examples:
     (1) Produce a UvGaussian from an unscented transform on `d = (x-y)` first (which has an exact solution) and then 
     (2) Create a new UvGaussian on an unscented transform of `inv(d)`
 """
-domainlimits(f::Function) = ()
+domainlimits(f::Function) = ArgLimits()
 
 #Default domainlimits for some functions
-domainlimits(f::typeof(log)) = (0,)
-domainlimits(f::typeof(sqrt)) = (0,)
-domainlimits(f::typeof(inv)) = (0,)
-domainlimits(f::typeof(asin)) = (0,1)
-domainlimits(f::typeof(acos)) = (0,1)
+domainlimits(f::typeof(log)) = ArgLimits(0.0)
+domainlimits(f::typeof(sqrt)) = ArgLimits(0.0)
+domainlimits(f::typeof(inv)) = ArgLimits(0.0)
+domainlimits(f::typeof(asin)) = ArgLimits(0.0, 1.0)
+domainlimits(f::typeof(acos)) = ArgLimits(0.0, 1.0)
 
 
 function scale_step(f, current::SigmaWeights, gs::AbstractGaussian...)
@@ -150,16 +186,16 @@ end
 
 function _scale_step(f, stepscale::Number, gs::AbstractGaussian...)    
     limits = domainlimits(f)
+    (limits isa ArgLimits) || error("domainlimits($(f)) must return an ArgLimits, instead it returned $(limits)")
 
-    #Ensure limits are a Tuple and return stepscale if there are no limits
-    (limits isa Tuple) || error("domainlimits($(f)) must return a tuple, instead it returned $(limits)")
-    isempty(limits) && return stepscale 
+    return _scale_step_limits(limits, stepscale, gs...)
+end
 
-    for lim in limits
-        stepscale = _min_step_scale(stepscale, lim, gs...)
-    end
+_scale_step_limits(lims::ArgLimits{0}, stepscale::Number, gs::AbstractGaussian...) = stepscale 
 
-    return stepscale
+function _scale_step_limits(lims::ArgLimits, stepscale::Number, gs::AbstractGaussian...)
+    stepscale = _min_step_scale(first(lims), stepscale, gs...)
+    return _scale_step_limits(Base.tail(lims), stepscale, gs...)
 end
 
 function _min_step_scale(stepscale::Number, limit::AbstractVector, g::MvGaussian)
@@ -185,7 +221,7 @@ function _min_step_scale(stepscale::Number, limits::Tuple{Vararg{<:Number}}, gs:
 end
 
 function _min_step_scale(oldscale::Number, limit::Number, g::UvGaussian{T}) where T
-    z = abs(convert(T, limit) - g.μ)/g.σ
+    z = abs(limit - g.μ)/g.σ
     newscale = convert(typeof(oldscale), z*(1 + inv(z+1))/2)
 
     #This ifelse statement returns old value if newscale is NaN
