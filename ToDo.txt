@@ -1,4 +1,7 @@
 ToDo:
+0.  A Multiple-Argument function should produce domainlimits(typeof(2argfunc)) = (ArgLimits(first_arg), ArgLimits(second_arg))
+    -  This is more intuitive and will likely vastly simplify the object and the implementation
+
 1.  Test this repo on an existing project (create a new test branch) to verify speed and accuracy (no additional thresholding yet)
 
 2.  Test scaling rules more rigorously (such as invprod3(x::SVector{3})) to ensure none of the sigma points cross the threshold
