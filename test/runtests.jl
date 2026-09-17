@@ -16,10 +16,18 @@ import UnscentedTransforms.add_rcov
     x1 = μ1 ± σ1 
     x2 = μ2 ± σ2
 
+    #Adding/subtracting
     @test (x1 + x2) == UvGaussian(μ1 + μ2, sqrt(σ1^2 + σ2^2))
     @test (x1 - x2) == UvGaussian(μ1 - μ2, sqrt(σ1^2 + σ2^2))
     @test 2*x1 == UvGaussian(μ1*2, σ1*2)
     @test x1*2 == UvGaussian(μ1*2, σ1*2)
+
+
+    #Scaling close to a domain limit 
+    w = SigmaWeights(1, SigmaParams())
+    w2 = scale_step(inv, w, x1)
+    @test w2.rc < abs(0-mean(x1))/std(x1) #Step must be less than the standard deviation distance to zero
+    @test all(d->d>0, SigmaPoints(weights=w2, source=x1)) #No sigma points should cross the 0 threshold
 end
 
 @testset "Sigma Points" begin
@@ -46,12 +54,12 @@ end
     Gx = MvGaussian(mx, Cx)
     Gy = MvGaussian(my, Cy)
 
-    Px  = SigmaPoints(Gx, θ)
-    Py  = SigmaPoints(Gy, θ)
-    Pyh = SigmaPoints(source = map(x->C*x, Px), weights=Px.weights)
+    Px  = SigmaPoints(θ, Gx)
+    Py  = SigmaPoints(θ, Gy)
+    Pyh = SigmaPoints(source=map(x->C*x, Px), weights=Px.weights)
 
     #Test round-trip conversion
-    Pxh = SigmaPoints(source = collect(Px), weights=Px.weights)
+    Pxh = SigmaPoints(source=collect(Px), weights=Px.weights)
     @test MvGaussian(Pxh).Σ.U ≈ Gx.Σ.U
     @test MvGaussian(Pxh).μ ≈ Gx.μ
 

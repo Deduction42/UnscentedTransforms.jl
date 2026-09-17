@@ -176,23 +176,27 @@ SigmaPoints{T}(source::T, weights::SigmaWeights)
 Unscented transform using 2N+1 vectors as points
 """
 Base.@kwdef struct SigmaPoints{S,T} <: AbstractVector{T}
-    source   :: S
     weights  :: SigmaWeights
+    source   :: S
+    
+    SigmaPoints(θ::SigmaWeights, source::UvGaussian) = new{typeof(source), meantype(source)}(θ, source)
+    SigmaPoints(θ::SigmaWeights, source::MvGaussian) = new{typeof(source), meantype(source)}(θ, source)
+    SigmaPoints(θ::SigmaWeights, source::AbstractGaussian) = new{typeof(source), meantype(source)}(θ, source)
+    SigmaPoints(θ::SigmaWeights, source::Tuple{Vararg{<:UvGaussian}}) = new{typeof(source), meantype(source[begin])}(θ, source)
 
-    SigmaPoints(source::AbstractGaussian, θ::SigmaWeights) = new{typeof(source), meantype(source)}(source, θ)
-
-    function SigmaPoints(source::AbstractVector, θ::SigmaWeights) 
+    function SigmaPoints(θ::SigmaWeights, source::AbstractVector) 
         Base.require_one_based_indexing(source)
-        return new{typeof(source), eltype(source)}(source, θ)
+        return new{typeof(source), eltype(source)}(θ, source)
     end
 end
 
-SigmaPoints(X, θ::SigmaParams) = SigmaPoints(X, SigmaWeights(dimlength(X), θ))
+SigmaPoints(θ::SigmaParams, X) = SigmaPoints(SigmaWeights(dimlength(X), θ), X)
+SigmaPoints(θ::SigmaWeights, x1::UvGaussian, xn::UvGaussian...) = SigmaPoints(θ, (x1, xn...)) 
 
 Base.IndexStyle(::Type{<:SigmaPoints}) = IndexLinear()
-Base.length(x::SigmaPoints{<:AbstractGaussian}) = 2*length(x.source) + 1
-Base.length(x::SigmaPoints{<:AbstractVector}) = length(x.source)
-Base.size(x::SigmaPoints) = (length(x),)
+Base.size(x::SigmaPoints{<:AbstractGaussian}) = (2*length(x.source) + 1,)
+Base.size(x::SigmaPoints{<:AbstractVector}) = (length(x.source),)
+Base.size(x::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}) = (2*length(x.source) + 1,)
 Base.firstindex(x::SigmaPoints) = 1
 Base.lastindex(x::SigmaPoints) = length(x)
 
@@ -202,6 +206,7 @@ dimlength(x::UvGaussian) = 1
 dimlength(X::SigmaPoints{<:AbstractGaussian}) = length(X.source)
 dimlength(X::SigmaPoints{<:UvGaussian}) = 1
 dimlength(X::SigmaPoints{<:AbstractVector}) = length(X.source[begin])
+dimlength(x::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}) = length(x.source)
 
 #If source is a vector, simply index it
 Base.getindex(points::SigmaPoints{<:AbstractVector}, i::Int) = points.source[i]
@@ -248,15 +253,15 @@ function MvGaussian(X::SigmaPoints)
     return MvGaussian(μ, std(X, μ))
 end
 
-function UvGaussian(x::SigmaPoints)
+function UvGaussian(X::SigmaPoints)
     μ = mean(X)
-    return UvGaussian(x::SigmaPoints, xtd(X, μ))
+    return UvGaussian(μ, std(X, μ))
 end
 
 #Dispatch patterns for generic function
-gaussian(x::SigmaPoints{<:AbstractVector{<:AbstractVector}}) = MvGaussian(x)
-gaussian(x::SigmaPoints{<:AbstractVector{<:Number}}) = UvGaussian(x)
-gaussian(x::SigmaPoints{<:AbstractGaussian}) = x.source
+gaussian(X::SigmaPoints{<:AbstractVector{<:AbstractVector}}) = MvGaussian(X)
+gaussian(X::SigmaPoints{<:AbstractVector{<:Number}}) = UvGaussian(X)
+gaussian(X::SigmaPoints{<:AbstractGaussian}) = X.source
 
 
 #======================================================================================================================================

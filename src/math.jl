@@ -33,15 +33,15 @@ Base.:*(g::MvGaussian{<:Cholesky}, x::Number) = MvGaussian(x*mean(g), Cholesky(x
 Base.:*(x::Number, g::MvGaussian{<:Diagonal}) = MvGaussian(x*mean(g), x*std(g))
 Base.:*(g::MvGaussian{<:Diagonal}, x::Number) = MvGaussian(x*mean(g), x*std(g))
 
-predict(f, θ::SigmaParams, args::UvGaussian...) = predict(f, SigmaWeights(length(args), θ), args...)
+gaussian(f, θ::SigmaParams, args::UvGaussian...) = gaussian(f, SigmaWeights(length(args), θ), args...)
 
-function predict(f, θ::SigmaWeights, args::UvGaussian...)
+function gaussian(f, θ::SigmaWeights, args::UvGaussian...)
     Np = 2*length(args) + 1
     θ  = scale_step(f, θ, args...)
 
-    old_points = SigmaPoints(args, θ)
+    old_points = SigmaPoints(θ, args...)
     indvec = SVector{Np}(firstindex(old_points):lastindex(old_points))
-    new_points = map(ind->f(old_points[ind]...), indvec) #Non-allocating result
+    new_points = SigmaPoints(θ, map(ind->f(old_points[ind]...), indvec)) #Non-allocating result
 
     return gaussian(new_points)
 end
@@ -156,13 +156,13 @@ function _scale_step(f, stepscale::Number, gs::AbstractGaussian...)
     isempty(limits) && return stepscale 
 
     for lim in limits
-        stepscale = _min_step_scale(stepscale, g, lim)
+        stepscale = _min_step_scale(stepscale, lim, gs...)
     end
 
     return stepscale
 end
 
-function _min_step_scale(stepscale::Number, g::MvGaussian, limit::AbstractVector)
+function _min_step_scale(stepscale::Number, limit::AbstractVector, g::MvGaussian)
     Base.require_one_based_indexing(limit)
     μ = mean(g)
 
@@ -174,7 +174,7 @@ function _min_step_scale(stepscale::Number, g::MvGaussian, limit::AbstractVector
     return stepscale 
 end
 
-function _min_step_scale(stepscale::Number, gs::Tuple{Vararg{<:UvGaussian}}, limits::Tuple{Vararg{<:Number}})
+function _min_step_scale(stepscale::Number, limits::Tuple{Vararg{<:Number}}, gs::UvGaussian...)
     length(gs) == length(limits) || error("Inputs must be same-length Tuples of UvGaussian and Number, recieved $(gs) and $(limits)")
 
     for i in eachindex(gs)
@@ -184,7 +184,7 @@ function _min_step_scale(stepscale::Number, gs::Tuple{Vararg{<:UvGaussian}}, lim
     return stepscale
 end
 
-function _min_step_scale(oldscale::Number, g::UvGaussian{T}, limit::Number) where T
+function _min_step_scale(oldscale::Number, limit::Number, g::UvGaussian{T}) where T
     z = abs(convert(T, limit) - g.μ)/g.σ
     newscale = convert(typeof(oldscale), z*(1 + inv(z+1))/2)
 

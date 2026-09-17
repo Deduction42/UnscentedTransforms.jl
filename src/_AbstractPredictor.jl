@@ -76,7 +76,7 @@ end
 
 #Nonlinar predictors (returns the same type as X)
 function predict(pred::NonlinearPredictor, X::MvGaussian, u)
-    return predict(pred, SigmaPoints(X, pred.θ), u) + MvGaussian(pred.Σ)
+    return predict(pred, SigmaPoints(pred.θ, X), u) + MvGaussian(pred.Σ)
 end
 
 function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
@@ -84,14 +84,14 @@ function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
     f_task(x) = Threads.@spawn(pred.f(x,u))
 
     if pred.multithreaded
-        return SigmaPoints(fetch.(map(f_task, X)), X.weights)
+        return SigmaPoints(X.weights, fetch.(map(f_task, X)))
     else
-        return SigmaPoints(map(f, X), X.weights)
+        return SigmaPoints(X.weights, map(f, X))
     end
 end
 
 function predict_similar(pred::NonlinearPredictor, X::MvGaussian, u)
-    return predict(pred, SigmaPoints(X, pred.θ), u) + MvGaussian(pred.Σ)
+    return predict(pred, SigmaPoints(pred.θ, X), u) + MvGaussian(pred.Σ)
 end
 
 
@@ -128,7 +128,7 @@ end
 
 function update(obs::NonlinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ}
     #Build the sigma points from the Gaussian variable
-    Xp = SigmaPoints(X, obs.θ)
+    Xp = SigmaPoints(obs.θ, X)
 
     #Propagate the sigma points through the predictor
     Yp = predict(obs, Xp, u)
