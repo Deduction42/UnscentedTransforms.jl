@@ -120,16 +120,6 @@ meancol(x::MvGaussian) = x.μ
 #Getting an index from a multivariate Gaussian produces a univariate Gaussian
 Base.getindex(x::MvGaussian, i::Integer) = UvGaussian(mean(x, i), std(x, i))
 
-"""
-SigmaWeights(c :: Float64, μ :: Tuple{Float64, Float64}, Σ :: Tuple{Float64, Float64})
-
-Weights for sigma points, calculated from SigmaParams and the state dimension L
-"""
-Base.@kwdef struct SigmaWeights
-    c :: Float64
-    μ :: Tuple{Float64, Float64}
-    Σ :: Tuple{Float64, Float64}
-end
 
 """
 SigmaParams(α = 1.0, κ = 0.0, β = 2.0)
@@ -151,19 +141,34 @@ Base.@kwdef struct SigmaParams
     β :: Float64 = 2.0
 end
 
-function SigmaWeights(L::Int64, θ::SigmaParams=SigmaParams())
-    α = θ.α
-    κ = θ.κ
-    β = θ.β
-    
-    λ  = α^2*(L+κ)-L                          #scaling factor
-    c  = L + λ                                #scaling factor
-    Wn = 0.5/c
-    Wμ = ((λ/c), Wn)                         #weights for means
-    WΣ = (Wμ[1] + (1-α^2+β), Wn)             #weights for covariance
-    return SigmaWeights(c=c, μ=Wμ, Σ=WΣ)
+"""
+SigmaWeights(c :: Float64, μ :: Tuple{Float64, Float64}, Σ :: Tuple{Float64, Float64})
+
+Weights for sigma points, calculated from SigmaParams and the state dimension L
+"""
+Base.@kwdef struct SigmaWeights
+    L  :: Float64
+    α² :: Float64 
+    κ  :: Float64 
+    β  :: Float64
+    rc :: Float64
+    Wn :: Float64
+    Wμ :: Float64
+    Wσ :: Float64
 end
 
+function SigmaWeights(L::Integer, P::SigmaParams=SigmaParams())
+    α² = abs2(P.α)
+    κ  = P.κ
+    β  = P.β
+
+    c  = α²*(L+κ) #Sigma point step size 
+    Wn = 0.5/c #Off-center weights (both mean and cov)
+    Wμ = 1 - L/c #Mean center weight 
+    Wσ = Wμ + 1 - α² + β #Cov center weight
+    return SigmaWeights(L=L, α²=α², κ=κ, β=β, rc=sqrt(c), Wn=Wn, Wμ=Wμ, Wσ=Wσ)
+end
+SigmaWeights(θ::SigmaWeights) = θ
 
 """
 SigmaPoints{T}(source::T, weights::SigmaWeights)
@@ -207,7 +212,7 @@ function Base.getindex(points::SigmaPoints{<:AbstractGaussian}, i::Int)
     i == firstindex(points) && return μ
 
     N  = length(points.source)
-    rc = sqrt(points.weights.c)
+    rc = points.weights.rc
 
     if firstindex(points) < i <= halfindex(points)
         ic = i-1
@@ -226,7 +231,7 @@ function Base.getindex(points::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}, i::In
     i == firstindex(points) && return μ
 
     N  = length(points.source)
-    rc = sqrt(points.weights.c)
+    rc = points.weights.rc
 
     if firstindex(points) < i <= halfindex(points)
         iμ = i-1
@@ -258,26 +263,26 @@ gaussian(x::SigmaPoints{<:AbstractGaussian}) = x.source
 Stats functions
 ======================================================================================================================================#
 function mean(X::SigmaPoints{<:AbstractVector})
-    (w0, w1) = X.weights.μ
+    (w0, wn) = (X.weights.Wμ, X.weights.Wn)
     μ = w0.*X[begin]
     outer_inds = (firstindex(X)+1):lastindex(X)
 
     if ismutable(μ)
         for ind in outer_inds
-            μ .+= w1.*X[ind]
+            μ .+= wn.*X[ind]
         end
         return μ
     else
-        return sum(ind-> w1.*X[ind], outer_inds, init=μ)
+        return sum(ind-> wn.*X[ind], outer_inds, init=μ)
     end
 end
 
 function mean(X::SigmaPoints{<:AbstractVector{<:Number}}) 
-    (w0, w1) = X.weights.μ
+    (w0, wn) = (X.weights.Wμ, X.weights.Wn)
     μ = w0*X[begin]
     outer_inds = (firstindex(X)+1):lastindex(X)
 
-    return sum(ind-> w1*X[ind], outer_inds, init=μ)
+    return sum(ind-> wn*X[ind], outer_inds, init=μ)
 end
 
 
@@ -287,7 +292,7 @@ mean(X::SigmaPoints{<:AbstractGaussian}) = mean(X.source)
 Returns a weighted covariance matrix of two sets of sigma points, based on weights from the first set
 """
 function cov(X::SigmaPoints, Y::SigmaPoints)
-    weight(ii::Integer) = ifelse(ii==1, X.weights.Σ[1], X.weights.Σ[2])
+    weight(ii::Integer) = ifelse(ii==1, X.weights.Wσ, X.weights.Wn)
 
     (nx, ny) = (length(X), length(Y))
     if nx != ny
@@ -314,9 +319,9 @@ function std(X::SigmaPoints{<:AbstractVector{<:AbstractVector}}, μ::AbstractVec
 end
 
 function std(X::SigmaPoints{<:AbstractVector{<:Number}}, μ::Number) 
-    (w0, w1) = (X.weights.Σ[1], X.weights.Σ[2])
+    (w0, wn) = (X.weights.Wσ, X.weights.Wn)
 
-    σ² = sum(x-> w1*(x-μ)^2, X[(begin+1):end]) #Off-center weights
+    σ² = sum(x-> wn*(x-μ)^2, X[(begin+1):end]) #Off-center weights
     return sqrt(σ² + w0*(X[begin]-μ)^2) #Center weights
 end
 
@@ -344,13 +349,13 @@ add_cov(ch::Cholesky, X::SigmaPoints, μ::AbstractVector) = add_cov!(copy(ch), X
 add_cov!(ch::Cholesky, X::SigmaPoints) = add_cov!(ch, X, mean(X))
 
 function add_cov!(ch::Cholesky, X::SigmaPoints, μ::AbstractVector)
-    (w0, w1) = (X.weights.Σ[1], X.weights.Σ[2])
+    (w0, wn) = (X.weights.Wσ, X.weights.Wn)
     x = zeros(eltype(X[begin]), length(X[begin]))
 
     #Add all of the surrounding points
     for ii in (firstindex(X)+1):lastindex(X)
         x .= X[ii] .- μ
-        chol_update!(ch, x, w1)
+        chol_update!(ch, x, wn)
     end
 
     #Add central point (where weight could be negative) 

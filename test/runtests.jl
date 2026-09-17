@@ -1,11 +1,11 @@
 using Revise
+using UnscentedTransforms
 using Test
 using LinearAlgebra
 using StaticArrays
 using Statistics
 import Random
 
-using UnscentedTransforms
 import UnscentedTransforms.add_cov
 import UnscentedTransforms.add_lcov
 import UnscentedTransforms.add_rcov

@@ -95,6 +95,7 @@ plot!(fig, [s.μ[1] for s in vs[1:(end-1)]], label="velocity")
 plot!(fig, [s.μ[2] for s in vs[1:(end-1)]], label="position")
 png(fig, joinpath(@__DIR__, "outlier cutoff $(outlier)"))
 
+display(fig)
 #plot([sqrt( min(5*σ, s.x[1]^2/exp(s.x[3])) + s.x[2]^2) for s in vs[1:(end-1)]]) #amplitude-equivalent energy
 
 #=
