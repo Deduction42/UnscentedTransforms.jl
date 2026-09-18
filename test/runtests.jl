@@ -1,15 +1,35 @@
 using Revise
+using UnscentedTransforms
 using Test
+using Aqua
 using LinearAlgebra
 using StaticArrays
-import Statistics.mean
-import Statistics.cov
+using Statistics
 import Random
 
-using UnscentedTransforms
 import UnscentedTransforms.add_cov
 import UnscentedTransforms.add_lcov
 import UnscentedTransforms.add_rcov
+
+@testset "Basic Math" begin
+    (μ1, σ1) = (0.1, 1.0)
+    (μ2, σ2) = (1.0, 0.1)
+    x1 = μ1 ± σ1 
+    x2 = μ2 ± σ2
+
+    #Adding/subtracting
+    @test (x1 + x2) == UvGaussian(μ1 + μ2, sqrt(σ1^2 + σ2^2))
+    @test (x1 - x2) == UvGaussian(μ1 - μ2, sqrt(σ1^2 + σ2^2))
+    @test 2*x1 == UvGaussian(μ1*2, σ1*2)
+    @test x1*2 == UvGaussian(μ1*2, σ1*2)
+
+
+    #Scaling close to a domain limit 
+    w = SigmaWeights(1, SigmaParams())
+    w2 = scale_spread(inv, w, x1)
+    @test w2.rc < abs(0-mean(x1))/std(x1) #Step must be less than the standard deviation distance to zero
+    @test all(d->d>0, SigmaPoints(weights=w2, source=x1)) #No sigma points should cross the 0 threshold
+end
 
 @testset "Sigma Points" begin
     Random.seed!(1234)
@@ -35,13 +55,14 @@ import UnscentedTransforms.add_rcov
     Gx = MvGaussian(mx, Cx)
     Gy = MvGaussian(my, Cy)
 
-    Px  = SigmaPoints(Gx, θ)
-    Py  = SigmaPoints(Gy, θ)
-    Pyh = SigmaPoints(points = map(x->C*x, Px.points), weights=Px.weights)
+    Px  = SigmaPoints(θ, Gx)
+    Py  = SigmaPoints(θ, Gy)
+    Pyh = SigmaPoints(source=map(x->C*x, Px), weights=Px.weights)
 
     #Test round-trip conversion
-    @test MvGaussian(Px).Σ.U ≈ Gx.Σ.U
-    @test MvGaussian(Px).μ ≈ Gx.μ
+    Pxh = SigmaPoints(source=collect(Px), weights=Px.weights)
+    @test MvGaussian(Pxh).Σ.U ≈ Gx.Σ.U
+    @test MvGaussian(Pxh).μ ≈ Gx.μ
 
     #Test adding varainces
     @test cov(Px, Px) ≈ cov(Px)
@@ -51,7 +72,7 @@ import UnscentedTransforms.add_rcov
     @test add_lcov(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
     @test add_rcov(Cx.U*C', Cx.U*C').U ≈ cholesky(hermitianpart!(2*C*Sx*C')).U
     @test add_lcov(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
-    @test MvGaussian(Px, Cx).Σ.U ≈ cholesky(Sx + Sx).U
+    @test MvGaussian(Px, Cx).Σ.U ≈ cholesky(Sx).U
 end
 
 @testset "State Space" begin
@@ -222,3 +243,9 @@ end
     @test X_linearpred.μ ≈ X_nonlinpred.μ
     @test Matrix(X_linearpred.Σ) ≈ Matrix(X_nonlinpred.Σ)
 end
+
+@testset "Aqua.jl" begin
+    Aqua.test_all(UnscentedTransforms)
+end
+
+nothing

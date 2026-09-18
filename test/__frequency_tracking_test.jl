@@ -19,10 +19,10 @@ using UnscentedTransforms
 using StaticArrays
 using LinearAlgebra
 import Random
-using Plots; plotlyjs()
+using Plots#; plotlyjs()
 const Δt = 0.1
 
-outlier_suppression = false
+outlier_suppression = true
 outlier = ifelse(outlier_suppression, 2.0, Inf)
 
 Random.seed!(45678)
@@ -95,6 +95,7 @@ plot!(fig, [s.μ[1] for s in vs[1:(end-1)]], label="velocity")
 plot!(fig, [s.μ[2] for s in vs[1:(end-1)]], label="position")
 png(fig, joinpath(@__DIR__, "outlier cutoff $(outlier)"))
 
+display(fig)
 #plot([sqrt( min(5*σ, s.x[1]^2/exp(s.x[3])) + s.x[2]^2) for s in vs[1:(end-1)]]) #amplitude-equivalent energy
 
 #=
