@@ -1,16 +1,22 @@
 ToDo:
-0.  A Multiple-Argument function should produce domainlimits(typeof(2argfunc)) = (ArgLimits(first_arg), ArgLimits(second_arg))
-    -  This is more intuitive and will likely vastly simplify the object and the implementation
-
 1.  Test this repo on an existing project (create a new test branch) to verify speed and accuracy (no additional thresholding yet)
 
 2.  Test scaling rules more rigorously (such as invprod3(x::SVector{3})) to ensure none of the sigma points cross the threshold
 
 3.  Extend `gaussian(f, weights, args...)` on all argument types and build scaling rules more deeply into the UKF
-    -   This also means that domainlimits(f::innerfunc) needs to be specified, or that we need to pass ArgLimits arguments
+    -   The main problem is that the UKF builds an internal function that holds inputs constant
+    -   This means that we need to enable the following steps:
+        Allow the the user to be able to define 
+        -   domainlimits(mypredictor, ::Type{<:AbstractVector}) = ArgLimits(xlim...)
+        Scale pred.θ before producing SigmaPoints(θ, x) near line 78 in AbstractPredictor
+        -   ensure "arglims = domainlimits(mypredictor, meantype(x))" produces a single ArgLimits
+        -   Use "θ = scale_spread(arglims, pred.θ, state)" then call "predict(pred, SigmaPoints(θ, x), u) + MvGaussian(pred.Σ)"
 
 4.  Validate updated UKF in the same existing project and verify results
 
+5.  Merge code from _AbstractPredictor.jl into _StateSpaceModel.jl (AbstractPredictor only belongs to StateSpaceModel)
+
+6.  May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"

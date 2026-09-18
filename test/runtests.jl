@@ -1,6 +1,7 @@
 using Revise
 using UnscentedTransforms
 using Test
+using Aqua
 using LinearAlgebra
 using StaticArrays
 using Statistics
@@ -25,7 +26,7 @@ import UnscentedTransforms.add_rcov
 
     #Scaling close to a domain limit 
     w = SigmaWeights(1, SigmaParams())
-    w2 = scale_step(inv, w, x1)
+    w2 = scale_spread(inv, w, x1)
     @test w2.rc < abs(0-mean(x1))/std(x1) #Step must be less than the standard deviation distance to zero
     @test all(d->d>0, SigmaPoints(weights=w2, source=x1)) #No sigma points should cross the 0 threshold
 end
@@ -242,3 +243,9 @@ end
     @test X_linearpred.μ ≈ X_nonlinpred.μ
     @test Matrix(X_linearpred.Σ) ≈ Matrix(X_nonlinpred.Σ)
 end
+
+@testset "Aqua.jl" begin
+    Aqua.test_all(UnscentedTransforms)
+end
+
+nothing

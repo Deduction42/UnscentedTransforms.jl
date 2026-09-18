@@ -22,6 +22,7 @@ png(fig, joinpath(@__DIR__, "uncertainty scaling"))
 display(fig)
 
 #=
+fig = plot()
 plot!(vσ, new_std_lin.(vσ), label="linear", yaxis=:log10)
 plot!(vσ, new_std_raw.(vσ), label="raw unscented", yaxis=:log10)
 plot!(vσ, new_std.(vσ), label="scaled unscented", yaxis=:log10)

@@ -3,7 +3,7 @@ ToDo:
 
 Post cleanup:
 (1) Redefine "Σ" as "σ" for MvGaussian covariance field, as the square root form is being used 
-(2) Redefine add_cov to σ_add, σ_add_left, σ_add_right
+(2) Redefine add_cov to sumstd, sumstd_left, sumstd_right
 
 -   This is a good resource to verify other scaling rules
     https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
@@ -97,7 +97,7 @@ MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(
 MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.Σ))
-Base.length(MvGaussian) = length(MvGaussian.μ)
+Base.length(x::MvGaussian) = length(x.μ)
 meantype(x::MvGaussian) = typeof(x.μ)
 
 mean(x::MvGaussian) = x.μ
