@@ -3,6 +3,8 @@ ToDo:
 
 2.  Extend `gaussian(f, weights, args...)` on all argument types and build scaling rules more deeply into the UKF
     -   The main problem is that the UKF builds an internal function that holds inputs constant
+        -   We could adjust the weights before constructing the modified "f" (i,e, fi)
+        -   Ensure that domainlimits(fi, x) produces ArgLimits{0} through output printing
     -   This means that we need to enable the following steps:
         Allow the the user to be able to define 
         -   domainlimits(mypredictor, ::Type{<:AbstractVector}) = ArgLimits(xlim...)
