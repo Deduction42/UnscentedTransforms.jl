@@ -10,8 +10,6 @@ ToDo:
         -   ensure "arglims = domainlimits(pred.f, meantype(x))" produces a single ArgLimits
         -   Use "θ = scale_spread(arglims, pred.θ, x)" then call "predict(pred.f, SigmaPoints(θ, x), u) + pred.ε"
 
-
-
 3.  Validate updated UKF in the same existing project and verify results
 
 4.  Code Cleanup:

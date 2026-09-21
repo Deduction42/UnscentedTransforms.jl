@@ -1,6 +1,5 @@
 module UnscentedTransforms
     include("_SigmaPoints.jl")
-    include("_AbstractPredictor.jl")
     include("_StateSpaceModel.jl")
     include("math.jl")
     include("domainlimits.jl")
