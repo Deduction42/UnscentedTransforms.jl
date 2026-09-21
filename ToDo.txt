@@ -1,25 +1,27 @@
 ToDo:
-1.  Extend `gaussian(f, weights, args...)` on all argument types and build scaling rules more deeply into the UKF
-    -   The main problem is that the UKF builds an internal function that holds inputs constant
-        -   We could adjust the weights before constructing the modified "f" (i,e, fi)
-        -   Ensure that domainlimits(fi, x) produces ArgLimits{0} through output printing
-    -   This means that we need to enable the following steps:
-        Allow the the user to be able to define 
-        -   domainlimits(mypredictor, ::Type{<:AbstractVector}) = ArgLimits(xlim...)
-        Scale pred.θ before producing SigmaPoints(θ, x) near line 78 in AbstractPredictor
-        -   ensure "arglims = domainlimits(mypredictor, meantype(x))" produces a single ArgLimits
-        -   Use "θ = scale_spread(arglims, pred.θ, state)" then call "predict(pred, SigmaPoints(θ, x), u) + MvGaussian(pred.Σ)"
+1.  Update UKF model constructors to includ MvGaussian in the noise model (to leverage its constructors)
+    -   NonLinearPredictor(f, ε::MvGaussian, θ::SigmaParams)
+    -   LinearPredictor(A::AbstractMatrix, B::AbstractMatrix, ε::MvGaussian)
 
-2.  Validate updated UKF in the same existing project and verify results
+2.  Extend `gaussian(f, weights, args...)` on all argument types and build scaling rules more deeply into the UKF
+    1.  Create scaling methods for SigmaParams too (UKF defines params not weights)
 
-3.  Code Cleanup:
+    2.  Scale pred.θ before producing SigmaPoints(θ, x) near line 78 in AbstractPredictor
+        -   ensure "arglims = domainlimits(pred.f, meantype(x))" produces a single ArgLimits
+        -   Use "θ = scale_spread(arglims, pred.θ, x)" then call "predict(pred.f, SigmaPoints(θ, x), u) + pred.ε"
+
+
+
+3.  Validate updated UKF in the same existing project and verify results
+
+4.  Code Cleanup:
     -   Merge code from _AbstractPredictor.jl into _StateSpaceModel.jl (AbstractPredictor only belongs to StateSpaceModel)
     -   Separate out "sigmapoints.jl" and "gaussian.jl" as two separate files 
     -   Name changes in sigmapoints.jl and gaussian.jl
         -   "Σ" to "σ" to emphasize square-root form 
         -   add_cov to sumstd, (along with sumstd_left, sumstd_right) to emphasize squre-root result
 
-4.  May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
+5.  May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"
