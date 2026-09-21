@@ -1,14 +1,16 @@
 ToDo:
-1.  Test scaling rules more rigorously (such as invprod3(x::SVector{3})) to ensure none of the sigma points cross the threshold
+1.  Update UKF model constructors to includ MvGaussian in the noise model (to leverage its constructors)
+    -   NonLinearPredictor(f, ε::MvGaussian, θ::SigmaParams)
+    -   LinearPredictor(A::AbstractMatrix, B::AbstractMatrix, ε::MvGaussian)
 
 2.  Extend `gaussian(f, weights, args...)` on all argument types and build scaling rules more deeply into the UKF
-    -   The main problem is that the UKF builds an internal function that holds inputs constant
-    -   This means that we need to enable the following steps:
-        Allow the the user to be able to define 
-        -   domainlimits(mypredictor, ::Type{<:AbstractVector}) = ArgLimits(xlim...)
-        Scale pred.θ before producing SigmaPoints(θ, x) near line 78 in AbstractPredictor
-        -   ensure "arglims = domainlimits(mypredictor, meantype(x))" produces a single ArgLimits
-        -   Use "θ = scale_spread(arglims, pred.θ, state)" then call "predict(pred, SigmaPoints(θ, x), u) + MvGaussian(pred.Σ)"
+    1.  Create scaling methods for SigmaParams too (UKF defines params not weights)
+
+    2.  Scale pred.θ before producing SigmaPoints(θ, x) near line 78 in AbstractPredictor
+        -   ensure "arglims = domainlimits(pred.f, meantype(x))" produces a single ArgLimits
+        -   Use "θ = scale_spread(arglims, pred.θ, x)" then call "predict(pred.f, SigmaPoints(θ, x), u) + pred.ε"
+
+
 
 3.  Validate updated UKF in the same existing project and verify results
 

@@ -112,7 +112,7 @@ Examples:
 """
 domainlimits(f::Function) = ArgLimits()
 domainlimits(f::Function, t1::Type{<:Any}) = domainlimits(f)
-domainlimits(f::Function, t1::Type{<:Any}, ts::Type{<:Any}...) = map(t->domainlimits(f,t), (t1, ts...))
+domainlimits(f::Function, t1::Type{<:Any}, ts::Type{<:Any}...) = domainlimits(f, t1)
 
 #Default domainlimits for some functions
 domainlimits(f::typeof(log), ::Type{<:Number}) = ArgLimits(0.0)
@@ -132,7 +132,7 @@ function scale_spread(limits::DomainLimits, current::SigmaWeights, gs::AbstractG
     ϵ = 4*sqrt(eps(typeof(current.rc))) #Step size large enough to guarantee overcoming machine precision
 
     #Check the step scale calculate a shrinking factor ϕ that is large enough to overcome machine precission error
-    rc2 = _scale_step(current.rc, limits, gs...)
+    rc2 = _scale_step(current.rc, limits, gs)
     ϕ = max(rc2/current.rc, ϵ)
 
     #Return the current SigmaWeights if the step size doesn't need shrinking
@@ -152,13 +152,15 @@ function scale_spread(limits::DomainLimits, current::SigmaWeights, gs::AbstractG
     return θ
 end
 
+#Dispatch patterns over tuples of AbstractGaussian
 function _scale_step(stepscale::Number, lims::Tuple{Vararg{ArgLimits,N1}}, gs::Tuple{Vararg{AbstractGaussian,N2}}) where {N1,N2} 
     N1 == N2 || throw(ArgumentError("Number of limits $(lims) must match the number of arguments $(gs)"))
     newscale = _scale_step(stepscale, first(lims), first(gs))
     return _scale_step(newscale, tail(lims), tail(gs))
 end
-
 _scale_step(stepscale::Number, lims::Tuple{<:ArgLimits}, gs::Tuple{<:AbstractGaussian}) = _scale_step(stepscale, first(lims), first(gs))
+_scale_step(stepscale::Number, lims::ArgLimits, gs::Tuple{<:AbstractGaussian}) = _scale_step(stepscale, lims, first(gs))
+
 
 function _scale_step(stepscale::Number, lims::ArgLimits{N}, g::AbstractGaussian) where N
     newscale = _scale_step_arg(stepscale, first(lims), g)
@@ -180,9 +182,11 @@ function _scale_step_arg(stepscale::Number, limit::AbstractVector, g::MvGaussian
     return stepscale 
 end
 
-function _scale_step_arg(stepscale::Number, limit::Number, g::UvGaussian{T}) where T
-    z = abs(limit - g.μ)/g.σ
-    newscale = convert(typeof(stepscale), z*(1 + inv(z+1))/2)
+function _scale_step_arg(stepscale::T, limit::Number, g::UvGaussian) where T <: Number
+    ϵ = 128*eps(g.μ) #Ensure step is large enough for sufficient machine precision
+    z = abs(limit - g.μ)/g.σ #Limit distance with respect to standard deviations 
+    zc = max(ϵ, z*(1 + inv(z+1))/2) #Corrected distance that approaches the limit, but stops short
+    newscale = convert(T, zc)
 
     #This ifelse statement returns old value if newscale is NaN
     return ifelse(newscale < stepscale, newscale, stepscale)

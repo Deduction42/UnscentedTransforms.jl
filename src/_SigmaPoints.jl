@@ -188,8 +188,9 @@ Base.@kwdef struct SigmaPoints{S,T} <: AbstractVector{T}
     end
 end
 
-SigmaPoints(θ::SigmaParams, X) = SigmaPoints(SigmaWeights(dimlength(X), θ), X)
-SigmaPoints(θ::SigmaWeights, x1::UvGaussian, xn::UvGaussian...) = SigmaPoints(θ, (x1, xn...)) 
+SigmaPoints(θ::SigmaParams, x) = SigmaPoints(SigmaWeights(dimlength(x), θ), x)
+SigmaPoints(θ::SigmaParams, x1, xn...) = SigmaPoints(SigmaWeights(length(xn)+1, θ), x1, xn...)
+SigmaPoints(θ::SigmaWeights, x1::UvGaussian, xn::UvGaussian...) = SigmaPoints(θ, (x1, xn...))
 
 Base.IndexStyle(::Type{<:SigmaPoints}) = IndexLinear()
 Base.size(x::SigmaPoints{<:AbstractGaussian}) = (2*length(x.source) + 1,)
