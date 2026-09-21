@@ -1,38 +1,56 @@
 abstract type AbstractPredictor end 
 
 """
-LinearPredictor(A::AbstractMatrix, B::AbstractMatrix, Σ::Cholesky)
+LinearPredictor(A::AbstractMatrix, B::AbstractMatrix, ε::MvGaussian)
 
-Linear predictor with added noise covariance Σ (internally a Cholesky factorization is applied)
+Linear predictor with added noise `ε`
 Prediction is given by 
+```
 y = Ax + Bu + ε 
-where x and u are vectors and ε is white noise
+```
 """
-@kwdef struct LinearPredictor{TA<:AbstractArray, TB<:AbstractArray, TΣ<:Cholesky} <: AbstractPredictor
+@kwdef struct LinearPredictor{TA<:AbstractArray, TB<:AbstractArray, Tε<:MvGaussian} <: AbstractPredictor
     A :: TA 
     B :: TB 
-    Σ :: TΣ
+    ε :: Tε
 end
-LinearPredictor(A::AbstractMatrix, B::AbstractMatrix, Σ::AbstractMatrix) = LinearPredictor(A, B, cholesky(Σ))
-
+LinearPredictor(A::AbstractMatrix, B::AbstractMatrix, Σ::AbstractMatrix) = LinearPredictor(A, B, MvGaussian(Σ))
 
 """
-NonlinearPredictor(F::Function, Σ::Cholesky, θ::SigmaParams, multithreaded)
+NonlinearPredictor(f::Function, ε::MvGaussian, θ::SigmaParams, multithreaded)
 
-Nonlinear predictor with added noise covariance Σ (internally a Cholesky factorization is applied)
+Nonlinear predictor `f` with added noise `ε`
 Prediction is given by 
+```
 y = f(x, u) + ε 
-where x is a vector (u can be any object) and ε is white noise
+```
 """
-@kwdef struct NonlinearPredictor{TF<:Function, TΣ<:Cholesky} <: AbstractPredictor
+@kwdef struct NonlinearPredictor{TF, Tε<:MvGaussian} <: AbstractPredictor
     f :: TF
-    Σ :: TΣ
+    ε :: Tε
     θ :: SigmaParams
     multithreaded :: Bool = false
 end
-NonlinearPredictor(f::Function, Σ::AbstractMatrix, θ::SigmaParams) = NonlinearPredictor(f, cholesky(Σ), θ)
+NonlinearPredictor(f, Σ::AbstractMatrix, θ::SigmaParams, multithreaded::Bool) = NonlinearPredictor(f, MvGaussian(Σ), θ, multithreaded)
 
 const StatePredictor = Union{LinearPredictor, NonlinearPredictor}
+
+
+"""
+VecFuncView(f::Function, inds)
+
+An object that behaves like a view of a function `f` that produces an abstract vector. Calling it invokes 
+```
+fv(args...) = view(fv.f(args...), fv.inds)
+```
+"""
+@kwdef struct VecFuncView{TF<:Function, TI}
+    f :: Function 
+    inds :: TI 
+end
+
+(fv::VecFuncView)(args...) = view(fv.f(args...), fv.inds)
+domainlimits(fv::VecFuncView, args...) = domainlimits(fv.f, args...)
 
 #=======================================================================================================================
 Views on predictors (enables removal of missing observations with minimal allocation)
@@ -41,13 +59,17 @@ function Base.view(pred::LinearPredictor, inds)
     return LinearPredictor(
         view(pred.A, inds, :),
         view(pred.B, inds, :),
-        covview(pred.Σ, inds)
+        view(pred.ε, inds)
     )
 end
 
-function Base.view(pred::NonlinearPredictor, inds; θ=pred.θ)
-    fv(x, u) = view(pred.f(x, u), inds)
-    return NonlinearPredictor(fv, covview(pred.Σ, inds), θ)
+function Base.view(pred::NonlinearPredictor, inds; θ=pred.θ, multithreaded=pred.multithreaded)
+    return NonlinearPredictor(
+        VecFuncView(pred.f, inds),
+        view(pred.ε, inds), 
+        θ,
+        multithreaded
+    )
 end
 
 
@@ -68,7 +90,23 @@ Base.@kwdef mutable struct StateSpaceModel{TX<:MvGaussian, TP<:StatePredictor, T
     predictor :: TP 
     observer  :: TO
     outlier :: Float64 = Inf64
-end 
+
+    function StateSpaceModel{TX,TP,TO}(state, predictor, observer, outlier) where {TX<:MvGaussian, TP<:StatePredictor, TO<:StatePredictor}
+        return new{TX,TP,TO}(correlated(state), predictor, observer, outlier)
+    end
+
+    function StateSpaceModel(state::MvGaussian, predictor::TP, observer::TO, outlier) where {TP<:StatePredictor, TO<:StatePredictor}
+        newstate = correlated(state)
+        return new{typeof(newstate),TP,TO}(newstate, predictor, observer, outlier)
+    end
+end
+
+#=
+function StateSpaceModel(state::MvGaussian{<:Any, <:Diagonal}, predictor::StatePredictor, observer::StatePredictor, outlier)
+    corrstate = correlated(state)
+    return StateSpaceModel(corrstate, predictor, observer, outlier)
+end
+=#
 
 function kalman_filter!(ss::StateSpaceModel, y::AbstractVector, u)
     predict!(ss, u)
@@ -83,7 +121,7 @@ Predicts the state using the state-space model's predictor, and writes the predi
 value back to the state.
 """
 function predict!(ss::StateSpaceModel, u)
-    x = predict_similar(ss.predictor, ss.state, u)
+    x = predict(ss.predictor, ss.state, u)
 
     if isfinite(x)
         ss.state = x 
@@ -129,14 +167,6 @@ function update!(ss::StateSpaceModel, y::AbstractVector, u)
 end
 
 
-
-"""
-covview(ch::Cholesky, inds) = Cholesky(view(ch.U, inds, inds), :U, 0)
-
-View of a cholesky decomposition of a covariance matrix subspace defined by 'inds'
-"""
-covview(ch::Cholesky, inds) = Cholesky(UpperTriangular(view(ch.U, inds, inds)))
-
 #=======================================================================================================================
 Prediction functions (uncertainty propagation)
 =======================================================================================================================#
@@ -144,19 +174,14 @@ Prediction functions (uncertainty propagation)
 #Linear predictors
 function predict(pred::LinearPredictor, X::MvGaussian, u)
     xh = pred.A*X.μ + pred.B*u 
-    Σh = add_lcov(pred.Σ, pred.A*std(X).L)
-    return MvGaussian(xh, Σh)
-end
-
-function predict_similar(pred::LinearPredictor, X::MvGaussian{T}, u) where T
-    xh = T(pred.A*X.μ + pred.B*u)
-    Σh = add_lcov(pred.Σ, pred.A*std(X).L)
+    Σh = add_lcov(std(pred.ε), pred.A*std(X).L)
     return MvGaussian(xh, Σh)
 end
 
 #Nonlinar predictors (returns the same type as X)
-function predict(pred::NonlinearPredictor, X::MvGaussian, u)
-    return predict(pred, SigmaPoints(pred.θ, X), u) + MvGaussian(pred.Σ)
+function predict(pred::NonlinearPredictor, x::MvGaussian, u)
+    θ = scale_spread(pred.f, pred.θ, x)
+    return predict(pred, SigmaPoints(θ, x), u) + pred.ε
 end
 
 function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
@@ -170,17 +195,12 @@ function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
     end
 end
 
-function predict_similar(pred::NonlinearPredictor, X::MvGaussian, u)
-    return predict(pred, SigmaPoints(pred.θ, X), u) + MvGaussian(pred.Σ)
-end
-
-
 
 #=======================================================================================================================
 Update functions (Kalman-Update)
 =======================================================================================================================#
 function update(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ} 
-    (C, D, R, P) = (obs.A, obs.B, obs.Σ, std(X))
+    (C, D, R, P) = (obs.A, obs.B, std(obs.ε), std(X))
     yh = C*X.μ .+ D*u
 
     S = add_lcov(R, C*P.L) #Innovation covariance
@@ -212,7 +232,7 @@ function update(obs::NonlinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVect
 
     #Propagate the sigma points through the predictor
     Yp = predict(obs, Xp, u)
-    Y  = Yp + MvGaussian(obs.Σ) #Predicted Y distribution
+    Y  = Yp + obs.ε #Predicted Y distribution
     Z  = MvGaussian(y .- mean(Y), std(Y)) #Innovation distribution
 
     S   = std(Z) #Innovation covariance

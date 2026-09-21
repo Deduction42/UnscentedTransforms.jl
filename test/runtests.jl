@@ -97,21 +97,21 @@ end
     #=========================================================================================================================
     Set up classic Kalman filter equations
     =========================================================================================================================#
-    function classic_predict(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, u) where {Tμ,TΣ}
-        (A, B, Q, P) = (obs.A, obs.B, Matrix(obs.Σ), cov(X))
+    function classic_predict(obs::LinearPredictor, x::MvGaussian{Tμ,TΣ}, u) where {Tμ,TΣ}
+        (A, B, Q, P) = (obs.A, obs.B, cov(obs.ε), cov(x))
 
-        μ = A*X.μ + B*u
+        μ = A*x.μ + B*u
         Σ = hermitianpart!(A*P*A' + Q)
         return MvGaussian{Tμ,TΣ}(μ, cholesky(Σ))
     end
 
-    function classic_update(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector, u) where {Tμ,TΣ}
-        (C, D, R, P) = (obs.A, obs.B, Matrix(obs.Σ), cov(X))
+    function classic_update(obs::LinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVector, u) where {Tμ,TΣ}
+        (C, D, R, P) = (obs.A, obs.B, cov(obs.ε), cov(x))
 
-        z  = y .- C*X.μ .+ D*u #Innovation 
+        z  = y .- C*x.μ .+ D*u #Innovation 
         S  = C*P*C' + R #Innovation covariance 
         K  = (P*C')/S
-        μ  = X.μ + K*z
+        μ  = x.μ + K*z
         Σ  = hermitianpart!((I-K*C)*P)
         return MvGaussian{Tμ,TΣ}(μ, cholesky(Σ))
     end
@@ -144,9 +144,9 @@ end
         0.0 0.0 1.0
     ]
     D  = @SMatrix [0.0; 0.0]
-    Q  = Matrix(Diagonal(fill(σω^2, 3)))
-    R  = Matrix(Diagonal(fill(σε^2, 2)))
-    P  = Q*10
+    sQ = Diagonal(fill(σω, 3))
+    sR = Diagonal(fill(σε, 2))
+    sP = sQ*sqrt(10)
 
     #Simulate the inputs and outputs
     N  = 500
@@ -168,24 +168,24 @@ end
     end
 
     #Build a linear test system
-    lin_state = MvGaussian(SVector{3}(X[:,1]), copy(P))
-    lin_pred = LinearPredictor(A, B, Q)
-    lin_obs  = LinearPredictor(C, D, R)
+    lin_state = correlated(MvGaussian(SVector{3}(X[:,1]), copy(sP)))
+    lin_pred = LinearPredictor(A, B, sQ)
+    lin_obs  = LinearPredictor(C, D, sR)
     lin_sys  = StateSpaceModel(state=lin_state, predictor=lin_pred, observer=lin_obs)
 
     #Build a nonlinear test system
     f_predict(x, u) = A*x + B*u 
     f_observe(x, u) = C*x + D*u 
-    nl_state = MvGaussian(SVector{3}(X[:,1]), copy(P))
-    nl_pred = NonlinearPredictor(f_predict, cholesky(Q), SigmaParams(), false)
-    nl_obs  = NonlinearPredictor(f_observe, cholesky(R), SigmaParams(), false)
+    nl_state = correlated(MvGaussian(SVector{3}(X[:,1]), copy(sP)))
+    nl_pred = NonlinearPredictor(f_predict, sQ, SigmaParams(), false)
+    nl_obs  = NonlinearPredictor(f_observe, sR, SigmaParams(), false)
     nl_sys  = StateSpaceModel(state=nl_state, predictor=nl_pred, observer=nl_obs)
 
 
     #=========================================================================================================================
     Test single step predictions 
     =========================================================================================================================#
-    state  = MvGaussian(SVector{3}(X[:,1]), copy(P))
+    state  = correlated(MvGaussian(SVector{3}(X[:,1]), copy(sP)))
     X_classicpred = classic_predict(lin_sys.predictor, state, U[:,1])
     X_linearpred  = predict(lin_sys.predictor, state, U[:,1])
     X_nonlinpred  = predict(nl_sys.predictor, state, U[:,1])
@@ -225,7 +225,7 @@ end
 
     #Run the linear Kalman filter through long history
     Xlinear  = copy(X)
-    lin_sys.state = MvGaussian(SVector{3}(X[:,1]), copy(P))
+    lin_sys.state = correlated(MvGaussian(SVector{3}(X[:,1]), copy(sP)))
     for ii in 2:N 
         kalman_filter!(lin_sys, SVector{2}(Y[:,ii]), U[:,ii-1])
         Xlinear[:,ii] = lin_sys.state.μ
@@ -246,9 +246,9 @@ end
     #=========================================================================================================================
     Test multithreaded nonlinear system 
     =========================================================================================================================#
-    nl_state = MvGaussian(SVector{3}(X[:,1]), copy(P))
-    nl_pred = NonlinearPredictor(f_predict, cholesky(Q), SigmaParams(), true)
-    nl_obs  = NonlinearPredictor(f_observe, cholesky(R), SigmaParams(), true)
+    nl_state = MvGaussian(SVector{3}(X[:,1]), copy(sP))
+    nl_pred = NonlinearPredictor(f_predict, sQ, SigmaParams(), true)
+    nl_obs  = NonlinearPredictor(f_observe, sR, SigmaParams(), true)
     nl_sys  = StateSpaceModel(state=nl_state, predictor=nl_pred, observer=nl_obs)
 
     X_nonlinpred  = predict(nl_sys.predictor, state, U[:,1])

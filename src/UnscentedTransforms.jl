@@ -5,5 +5,5 @@ module UnscentedTransforms
     include("domainlimits.jl")
     
     export StateSpaceModel, LinearPredictor, NonlinearPredictor, MvGaussian, UvGaussian, SigmaPoints, SigmaParams, SigmaWeights, ArgLimits
-    export kalman_filter!, predict, predict!, update, update!, gaussian, ±, scale_spread
+    export kalman_filter!, predict, predict!, update, update!, gaussian, ±, scale_spread, correlated
 end

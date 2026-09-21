@@ -49,9 +49,9 @@ vsQ = [0.01*σ₊/Δt, 0.0001*σ₊, 0.1]
 vsR = [2*σ₊/Δt, σ₊]
 vsP = [10*σ₊/Δt, 10*σ₊, 10]
 
-QU = UpperTriangular(Matrix(Diagonal(vsQ)))
-RU = UpperTriangular(Matrix(Diagonal(vsR)))
-PU = UpperTriangular(Matrix(Diagonal(vsP)))
+QU = Diagonal(vsQ)
+RU = Diagonal(vsR)
+PU = Diagonal(vsP)
 
 function predictor_func(X, u)
     k = exp(X[3])
@@ -63,17 +63,17 @@ function predictor_func(X, u)
     return exp(A*Δt)*X #Discretize A and then predict result
 end
 
-predictor = NonlinearPredictor(f=predictor_func, Σ=Cholesky(QU), θ=SigmaParams(α=1.0))
+predictor = NonlinearPredictor(f=predictor_func, ε=MvGaussian(QU), θ=SigmaParams(α=1.0))
 
 C = @SMatrix [1 0 0 ; 0 1 0]
 D = @SMatrix zeros(2,0)
 observer_func(X, u) = C*X
 
-observer = LinearPredictor(C, D, Cholesky(RU))
+observer = LinearPredictor(C, D, MvGaussian(RU))
 #observer = NonlinearPredictor(f=observer_func, Σ=Cholesky(RU), θ=SigmaParams(α=1.0))
 
 x0 = @SVector [0, 0, log(k0)]
-state = MvGaussian(x0, Cholesky(PU))
+state = MvGaussian(x0, PU)
 
 model = StateSpaceModel(
     state = state,
@@ -82,7 +82,7 @@ model = StateSpaceModel(
     outlier  = outlier
 )
 
-vs = [state]
+vs = [model.state]
 
 for ii in 1:N
     kalman_filter!(model, Y[:,ii], Float64[])

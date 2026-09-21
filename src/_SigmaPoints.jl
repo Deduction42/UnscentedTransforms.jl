@@ -28,6 +28,7 @@ Base.:+(z::ZeroVec, x::AbstractVector) = x
 Base.:+(x::AbstractVector, z::ZeroVec) = x
 Base.:-(z::ZeroVec, x::AbstractVector) = -x
 Base.:-(x::AbstractVector, z::ZeroVec) = x 
+Base.view(x::ZeroVec, inds...) = x
 
 
 abstract type AbstractGaussian end
@@ -90,14 +91,17 @@ end
 MvGaussian(x::Union{ZeroVec,AbstractVector}, m::AbstractMatrix) = MvGaussian(x, cholesky(m))
 MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Union{LowerTriangular,UpperTriangular}) = MvGaussian(x, Cholesky(m))
 MvGaussian(m::Union{Diagonal,Factorization}) = MvGaussian(ZeroVec(), m)
+MvGaussian(m::Hermitian) = MvGaussian(ZeroVec(), cholesky(m))
 gaussian(μ::AbstractVector, σ::Union{Factorization, AbstractMatrix}) = MvGaussian(μ, σ)
 
 MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(SVector(map(std, args))))
 MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
 
-Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.σ))
+Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(convert(TX, x.μ), convert(TM, x.σ))
 Base.length(x::MvGaussian) = length(x.μ)
 meantype(x::MvGaussian) = typeof(x.μ)
+correlated(x::MvGaussian{<:Any,<:Diagonal}) = MvGaussian(x.μ, diag2chol(x.σ))
+correlated(x::MvGaussian{<:Any,<:Cholesky}) = x
 
 mean(x::MvGaussian) = x.μ
 std(x::MvGaussian) = x.σ 
@@ -116,7 +120,10 @@ meancol(x::MvGaussian) = x.μ
 
 #Getting an index from a multivariate Gaussian produces a univariate Gaussian
 Base.getindex(x::MvGaussian, i::Integer) = UvGaussian(mean(x, i), std(x, i))
+Base.view(x::MvGaussian, inds) = MvGaussian(view(x.μ, inds), _stdview(x.σ, inds))
 
+_stdview(σ::Cholesky, inds) = Cholesky(UpperTriangular(view(σ.U, inds, inds)))
+_stdview(σ::Diagonal, inds) = Diagonal(view(σ.diag, inds))
 
 """
 SigmaParams(α = 1.0, κ = 0.0, β = 2.0)
@@ -347,8 +354,11 @@ Returns the square-root form of adding covariances
 """
 function add_cov end
 
-add_cov(ch::Cholesky, X::SigmaPoints) = add_cov!(ch, X)
+add_cov(ch::Cholesky, X::SigmaPoints) = add_cov!(copy(ch), X)
+add_cov(d::Diagonal, X::SigmaPoints) = add_cov!(diag2chol(d), X, mean(X))
 add_cov(ch::Cholesky, X::SigmaPoints, μ::AbstractVector) = add_cov!(copy(ch), X, μ)
+add_cov(d::Diagonal, X::SigmaPoints, μ::AbstractVector) = add_cov!(diag2chol(d), X, μ)
+
 add_cov!(ch::Cholesky, X::SigmaPoints) = add_cov!(ch, X, mean(X))
 
 function add_cov!(ch::Cholesky, X::SigmaPoints, μ::AbstractVector)
@@ -465,6 +475,8 @@ function chol_update!(ch::Cholesky, x::Vector, w::Real)
     return w >= 0 ? lowrankupdate!(ch, x) : lowrankdowndate!(ch, x)
 end
 
+
+diag2chol(d::Diagonal) = Cholesky(UpperTriangular(Matrix(d)))
 
 chol_var(ch::Cholesky) = map(ii->chol_var(ch, ii), axes(ch.U, 2))
 chol_std(ch::Cholesky) = map(ii->chol_std(ch, ii), axes(ch.U, 2))
