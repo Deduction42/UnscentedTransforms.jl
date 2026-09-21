@@ -79,7 +79,7 @@ end
 
     #Test round-trip conversion
     Pxh = SigmaPoints(source=collect(Px), weights=Px.weights)
-    @test MvGaussian(Pxh).Σ.U ≈ Gx.Σ.U
+    @test std(MvGaussian(Pxh)).U ≈ std(Gx).U
     @test MvGaussian(Pxh).μ ≈ Gx.μ
 
     #Test adding varainces
@@ -90,7 +90,7 @@ end
     @test add_lcov(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
     @test add_rcov(Cx.U*C', Cx.U*C').U ≈ cholesky(hermitianpart!(2*C*Sx*C')).U
     @test add_lcov(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
-    @test MvGaussian(Px, Cx).Σ.U ≈ cholesky(Sx).U
+    @test std(MvGaussian(Px, Cx)).U ≈ cholesky(Sx).U
 end
 
 @testset "State Space" begin
@@ -98,7 +98,7 @@ end
     Set up classic Kalman filter equations
     =========================================================================================================================#
     function classic_predict(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, u) where {Tμ,TΣ}
-        (A, B, Q, P) = (obs.A, obs.B, Matrix(obs.Σ), Matrix(X.Σ))
+        (A, B, Q, P) = (obs.A, obs.B, Matrix(obs.Σ), cov(X))
 
         μ = A*X.μ + B*u
         Σ = hermitianpart!(A*P*A' + Q)
@@ -106,7 +106,7 @@ end
     end
 
     function classic_update(obs::LinearPredictor, X::MvGaussian{Tμ,TΣ}, y::AbstractVector, u) where {Tμ,TΣ}
-        (C, D, R, P) = (obs.A, obs.B, Matrix(obs.Σ), Matrix(X.Σ))
+        (C, D, R, P) = (obs.A, obs.B, Matrix(obs.Σ), cov(X))
 
         z  = y .- C*X.μ .+ D*u #Innovation 
         S  = C*P*C' + R #Innovation covariance 
@@ -191,12 +191,12 @@ end
     X_nonlinpred  = predict(nl_sys.predictor, state, U[:,1])
 
     #Linear/Classic consistency, predictions
-    @test X_linearpred.μ ≈ X_classicpred.μ
-    @test Matrix(X_linearpred.Σ) ≈ Matrix(X_classicpred.Σ)
+    @test mean(X_linearpred) ≈ mean(X_classicpred)
+    @test cov(X_linearpred) ≈ cov(X_classicpred)
 
     #Linear/Nonlinear consistency, predictions
-    @test X_linearpred.μ ≈ X_nonlinpred.μ
-    @test Matrix(X_linearpred.Σ) ≈ Matrix(X_nonlinpred.Σ)
+    @test mean(X_linearpred) ≈ mean(X_nonlinpred)
+    @test cov(X_linearpred) ≈ cov(X_nonlinpred)
 
 
     #=========================================================================================================================
@@ -207,12 +207,12 @@ end
     X_nonlinpost  = update(nl_sys.observer, state, Y[:,1], U[:,1]).X
 
     #Linear/Classic consistency, updates
-    @test X_linearpost.μ ≈ X_classicpost.μ
-    @test Matrix(X_linearpost.Σ) ≈ Matrix(X_classicpost.Σ)
+    @test mean(X_linearpost) ≈ mean(X_classicpost)
+    @test cov(X_linearpost) ≈ cov(X_classicpost)
 
     #Linear/Nonlinear consistency, updates
-    @test X_linearpost.μ ≈ X_nonlinpost.μ
-    @test Matrix(X_linearpost.Σ) ≈ Matrix(X_nonlinpost.Σ)
+    @test mean(X_linearpost) ≈ mean(X_nonlinpost)
+    @test cov(X_linearpost) ≈ cov(X_nonlinpost)
 
     #=========================================================================================================================
     Test long history consistency
@@ -255,11 +255,11 @@ end
     X_nonlinpost  = update(nl_sys.observer, state, Y[:,1], U[:,1]).X
 
     #Linear/Nonlinear consistency, updates
-    @test X_linearpost.μ ≈ X_nonlinpost.μ
-    @test Matrix(X_linearpost.Σ) ≈ Matrix(X_nonlinpost.Σ)
+    @test mean(X_linearpost) ≈ mean(X_nonlinpost)
+    @test cov(X_linearpost) ≈ cov(X_nonlinpost)
 
-    @test X_linearpred.μ ≈ X_nonlinpred.μ
-    @test Matrix(X_linearpred.Σ) ≈ Matrix(X_nonlinpred.Σ)
+    @test mean(X_linearpred) ≈ mean(X_nonlinpred)
+    @test cov(X_linearpred) ≈ cov(X_nonlinpred)
 end
 
 @testset "Aqua.jl" begin

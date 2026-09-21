@@ -15,7 +15,6 @@ using Accessors
 import Statistics.mean
 import Statistics.cov
 import Statistics.std
-import Statistics.var
 
 
 """
@@ -65,7 +64,7 @@ meantype(x::UvGaussian) = typeof(x.μ)
 
 mean(x::UvGaussian) = x.μ
 std(x::UvGaussian) = x.σ
-var(x::UvGaussian) = abs2(x.σ)
+cov(x::UvGaussian) = abs2(x.σ)
 cholcol(x::UvGaussian, i::Integer) = x.σ[i]
 meancol(x::UvGaussian) = x.μ
 
@@ -78,7 +77,7 @@ the constructor performs a cholesky decomposition.
 """
 @kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Factorization}} <: AbstractGaussian
     μ :: TX
-    Σ :: TM
+    σ :: TM
     MvGaussian{TX,TM}(x, m) where {TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Factorization}} = new{TX,TM}(x, m)
     function MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Factorization)
         cm = cholesky(m)
@@ -96,23 +95,23 @@ gaussian(μ::AbstractVector, σ::Union{Factorization, AbstractMatrix}) = MvGauss
 MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(SVector(map(std, args))))
 MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
 
-Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.Σ))
+Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(TX(x.μ), TM(x.σ))
 Base.length(x::MvGaussian) = length(x.μ)
 meantype(x::MvGaussian) = typeof(x.μ)
 
 mean(x::MvGaussian) = x.μ
-std(x::MvGaussian) = x.Σ 
-cov(x::MvGaussian{<:Any, <:Cholesky}) = x.L*x.U 
-cov(x::MvGaussian{<:Any, <:Diagonal}) = x.Σ*x.Σ
+std(x::MvGaussian) = x.σ 
+cov(x::MvGaussian{<:Any, <:Cholesky}) = AbstractMatrix(std(x))
+cov(x::MvGaussian{<:Any, <:Diagonal}) = x.σ*x.σ
 
 mean(x::MvGaussian, i::Integer) = x.μ[i]
-std(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = chol_std(x.Σ, i)
-std(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = x.Σ[i,i]
+std(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = chol_std(x.σ, i)
+std(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = x.σ[i,i]
 
-cholcol(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.Σ.L, :, i)
-cholcol(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = view(x.Σ, :, i)
-cholrow(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.Σ.R, :, i)
-cholrow(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = view(x.Σ, :, i)
+cholcol(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.σ.L, :, i)
+cholcol(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = view(x.σ, :, i)
+cholrow(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.σ.R, :, i)
+cholrow(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = view(x.σ, :, i)
 meancol(x::MvGaussian) = x.μ
 
 #Getting an index from a multivariate Gaussian produces a univariate Gaussian
@@ -335,7 +334,7 @@ std(X::SigmaPoints{<:AbstractGaussian}) = std(X.source)
 
 function cov(x::SigmaPoints)
     ch = std(x)
-    return ch.L*ch.U
+    return AbstractMatrix(ch)
 end
 
 #======================================================================================================================================
@@ -454,37 +453,6 @@ function sub_lcov!(ch::Cholesky, L::AbstractMatrix)
     return ch
 end
 
-#=
-function old_cov(X::SigmaPoints)
-    weight(ii::Integer) = ifelse(ii==1, X.weights.Σ[1], X.weights.Σ[2])
-
-    nx = length(first(X))
-    μx = mean(X)
-    T  = promote_type(Float64, eltype(μx))
-    S  = zeros(T, nx, nx)
-    ii = 0
-    for x in X
-        S .+= weight(ii) .* (x.-μx) .* (x.-μx)'
-    end
-    hermitianpart!(S) 
-
-    return S
-end
-
-function sigma_points(X::MvGaussian, w::SigmaWeights)
-    σc = sqrt(w.c)
-    points = [X.μ]
-    
-    for l in eachcol(X.Σ.L)
-        Δ = σc.*l
-        push!(points, X.μ .+ Δ)
-        push!(points, X.μ .- Δ)
-    end
-
-    return SigmaPoints(source=points, weights=w)
-end
-=#
-
 """
 chol_update!(ch::Cholesky, x::AbstractVector, w::Real)
 
@@ -508,4 +476,4 @@ function chol_var(ch::Cholesky, ii::Integer)
 end
 
 
-Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.Σ.U)
+Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.σ.U)
