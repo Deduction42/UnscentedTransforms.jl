@@ -114,7 +114,7 @@ std(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = x.σ[i,i]
 
 cholcol(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.σ.L, :, i)
 cholcol(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = view(x.σ, :, i)
-cholrow(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.σ.R, :, i)
+cholrow(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.σ.U, :, i)
 cholrow(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = view(x.σ, :, i)
 meancol(x::MvGaussian) = x.μ
 
@@ -298,9 +298,6 @@ end
 
 mean(X::SigmaPoints{<:AbstractGaussian}) = mean(X.source)
 
-"""
-Returns a weighted covariance matrix of two sets of sigma points, based on weights from the first set
-"""
 function cov(X::SigmaPoints, Y::SigmaPoints)
     weight(ii::Integer) = ifelse(ii==1, X.weights.Wσ, X.weights.Wn)
 

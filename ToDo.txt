@@ -5,7 +5,7 @@ ToDo:
     -   Merge code from _AbstractPredictor.jl into _StateSpaceModel.jl (AbstractPredictor only belongs to StateSpaceModel)
     -   Separate out "sigmapoints.jl" and "gaussian.jl" as two separate files 
     -   Name changes in sigmapoints.jl and gaussian.jl
-        -   add_cov to _norm2, (along with _norm2left, _norm2right) to emphasize squre-root result
+        -   add_cov to gaussadd, (along with gaussaddleft, gaussaddright) to emphasize squre-root result
 
 3.  May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
