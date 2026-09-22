@@ -1,5 +1,16 @@
 ToDo:
-1.  Validate updated UKF in the same existing project and verify results
+0.  Consider these resources (the third talks about constaint techniques), and see if we can achieve a better aproach
+    -   https://kalman-filter.com/unscented-kalman-filter/
+    -   https://jimbeck.caltech.edu/summerlectures/references/Unscented%20Kalman%20filter.pdf
+    -   https://c14750.wpmucdn.com/2970/files/2022/11/Constrained-Unscented-Kalman-Filter-For-Parameter-Identification-of-Structural-Systems.pdf
+    -   We might want to consider the simple approach of 
+        1.  Scaling the covariance so that the sigma points fit in the constraints, 
+        2.  Running the unscented transform on the scaled covariance 
+        3.  Perform reverse-scaling on the result
+
+
+1.  Build out "uncented" function and test it over a variety of alpha values
+    -   unscented(f, x::MvGausian, θ::SigmaParams)
 
 2.  Code Cleanup:
     -   Merge code from _AbstractPredictor.jl into _StateSpaceModel.jl (AbstractPredictor only belongs to StateSpaceModel)
