@@ -2,8 +2,7 @@
 ToDo:
 
 Post cleanup:
-(1) Redefine "Σ" as "σ" for MvGaussian covariance field, as the square root form is being used 
-(2) Redefine add_cov to sumstd, sumstd_left, sumstd_right
+(1) Redefine add_cov to sumstd, sumstd_left, sumstd_right
 
 -   This is a good resource to verify other scaling rules
     https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
