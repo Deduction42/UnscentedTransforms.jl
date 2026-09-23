@@ -187,13 +187,14 @@ end
 
 #Inner predict tunction that is applied directly to sigma points without additive noise
 function predict(fu, X::SigmaPoints, u; multithreaded=false)
-    f(x) = fu(x, u)
-    f_task(x) = Threads.@spawn(fu(x, u))
+    f(i) = fu(X[i], u)
+    f_task(i) = Threads.@spawn(fu(X[i], u))
+    inds = eachindex(X)
 
     if multithreaded
-        return SigmaPoints(X.weights, fetch.(map(f_task, X)))
+        return SigmaPoints(X.weights, fetch.(map(f_task, inds)))
     else
-        return SigmaPoints(X.weights, map(f, X))
+        return SigmaPoints(X.weights, map(f, inds))
     end
 end
 

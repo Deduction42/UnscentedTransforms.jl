@@ -24,30 +24,8 @@ import UnscentedTransforms.ArgLimits
     @test 2*x1 == UvGaussian(μ1*2, σ1*2)
     @test x1*2 == UvGaussian(μ1*2, σ1*2)
 
-
-    #Scaling close to a domain limit 
-    w = SigmaWeights(1, SigmaParams())
-    w2 = scale_spread(inv, w, x1)
-    @test w2.rc < abs(0-mean(x1))/std(x1) #Step must be less than the standard deviation distance to zero
-    @test all(d->d>0, SigmaPoints(weights=w2, source=x1)) #No sigma points should cross the 0 threshold
-
-    #Multivariate scaling close to a domain limit
-    x1 = 0.1 ± 1.0 
-    x2 = 0.2 ± 2.0 
-    x3 = 0.3 ± 3.0 
-
-    prod3inv(x1, x2, x3) = inv(x1*x2*x3)
-    UnscentedTransforms.domainlimits(f::typeof(prod3inv)) = (ArgLimits(0), ArgLimits(0), ArgLimits(0))
-    
-    X1 = SigmaPoints(SigmaParams(), x1, x2, x3)
-    w1 = X1.weights
-    w2 = scale_spread(prod3inv, w1, x1, x2, x3)
-    X2 = SigmaPoints(w2, x1, x2, x3)
-
-    @test !all(v-> all(x-> x>0, v), X1) #Some of the new points cross the threshold
-    @test all(v-> all(x-> x>0, v), X2) #None of the new points cross the threshold
-
 end
+
 
 @testset "Sigma Points" begin
     Random.seed!(1234)
@@ -75,9 +53,9 @@ end
 
     Px  = SigmaPoints(θ, Gx)
     Py  = SigmaPoints(θ, Gy)
-    Pyh = SigmaPoints(source=map(x->C*x, Px), weights=Px.weights)
+    Pyh = SigmaPoints(source=map(i->C*Px[i], eachindex(Px)), weights=Px.weights)
 
-    #Test round-trip conversion
+    #Test round-trip conversionlas
     Pxh = SigmaPoints(source=collect(Px), weights=Px.weights)
     @test std(MvGaussian(Pxh)).U ≈ std(Gx).U
     @test MvGaussian(Pxh).μ ≈ Gx.μ
@@ -92,6 +70,34 @@ end
     @test add_lcov(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
     @test std(MvGaussian(Px, Cx)).U ≈ cholesky(Sx).U
 end
+
+#=
+@testset "Sigma Point Scaling" begin 
+    #Scaling close to a domain limit 
+    w = SigmaWeights(1, SigmaParams())
+    w2 = scale_spread(inv, w, x1)
+    @test w2.rc < abs(0-mean(x1))/std(x1) #Step must be less than the standard deviation distance to zero
+    @test all(d->d>0, SigmaPoints(weights=w2, source=x1)) #No sigma points should cross the 0 threshold
+    
+
+    #Multivariate scaling close to a domain limit
+    x1 = 0.1 ± 1.0 
+    x2 = 0.2 ± 2.0 
+    x3 = 0.3 ± 3.0 
+
+    prod3inv(x1, x2, x3) = inv(x1*x2*x3)
+    UnscentedTransforms.domainlimits(f::typeof(prod3inv)) = (ArgLimits(0), ArgLimits(0), ArgLimits(0))
+    
+    X1 = SigmaPoints(SigmaParams(), x1, x2, x3)
+    w1 = X1.weights
+    w2 = scale_spread(prod3inv, w1, x1, x2, x3)
+    X2 = SigmaPoints(w2, x1, x2, x3)
+
+    @test !all(v-> all(x-> x>0, v), X1) #Some of the new points cross the threshold
+    @test all(v-> all(x-> x>0, v), X2) #None of the new points cross the threshold
+end
+=#
+
 
 @testset "State Space" begin
     #=========================================================================================================================

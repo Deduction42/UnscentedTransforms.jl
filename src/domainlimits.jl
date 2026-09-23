@@ -129,9 +129,9 @@ function scale_spread(f, current::Union{SigmaWeights,SigmaParams}, gs::AbstractG
 end
 
 function scale_spread(limits::DomainLimits, current::SigmaWeights, gs::AbstractGaussian...)
-    rc = current.rc
-    rc2 = _scale_step(rc, limits, gs)
-    return scale_spread(rc2/rc, current)
+    δ  = sqrt(0.5/w[1])
+    δ2 = _scale_step(δ, limits, gs)
+    return scale_spread(δ2/δ, current)
 end
 
 function scale_spread(limits::DomainLimits, current::SigmaParams, gs::AbstractGaussian...)
