@@ -122,25 +122,32 @@ domainlimits(f::typeof(asin), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
 domainlimits(f::typeof(acos), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
 
 
-function scale_spread(f, current::SigmaWeights, gs::AbstractGaussian...) 
+function scale_spread(f, current::Union{SigmaWeights,SigmaParams}, gs::AbstractGaussian...) 
     limits = domainlimits(f, map(meantype, gs)...)
     (limits isa DomainLimits) || error("domainlimits($(f)) must return an `ArgLimits` or a tuple of htem, instead it returned $(limits)")
     return scale_spread(limits, current, gs...)
 end
 
 function scale_spread(limits::DomainLimits, current::SigmaWeights, gs::AbstractGaussian...)
-    ϵ = 4*sqrt(eps(typeof(current.rc))) #Step size large enough to guarantee overcoming machine precision
+    rc = current.rc
+    rc2 = _scale_step(rc, limits, gs)
+    return scale_spread(rc2/rc, current)
+end
 
-    #Check the step scale calculate a shrinking factor ϕ that is large enough to overcome machine precission error
-    rc2 = _scale_step(current.rc, limits, gs)
-    ϕ = max(rc2/current.rc, ϵ)
+function scale_spread(limits::DomainLimits, current::SigmaParams, gs::AbstractGaussian...)
+    L  = sum(dimlength, gs)
+    rc = current.α*sqrt(L + current.κ)
+    rc2 = _scale_step(rc, limits, gs)
+    return scale_spread(rc2/rc, current)
+end
 
-    #Return the current SigmaWeights if the step size doesn't need shrinking
-    (ϕ >= 1) && return current 
-    
+function scale_spread(ϕ::Number, current::SigmaWeights)
+    (ϕ < 1) || return current  #Only proceeed if we know ϕ < 1
+
     #Create a new SigmaWeights object with the altered step size
-    ϕ² = abs2(ϕ)
+    #display("Rescaling α=$(sqrt(current.α²)*ϕ)")
     θ  = SigmaWeights(@set current.rc = ϕ*current.rc)
+    ϕ² = abs2(ϕ)
     c  = abs2(θ.rc)
 
     #Adjust the affected weights for the new step size
@@ -149,6 +156,14 @@ function scale_spread(limits::DomainLimits, current::SigmaWeights, gs::AbstractG
     @reset θ.Wμ = 1 - θ.L/c
     @reset θ.Wσ = θ.Wμ + 1 - θ.α² + θ.β
 
+    return θ
+end
+
+function scale_spread(ϕ::Number, current::SigmaParams)
+    (ϕ < 1) || return current #Only proceeed if we know ϕ < 1
+    #display("Rescaling α=$(current.α*ϕ)")
+
+    θ = @set current.α = current.α*ϕ
     return θ
 end
 
@@ -175,15 +190,15 @@ function _scale_step_arg(stepscale::Number, limit::AbstractVector, g::MvGaussian
     μ = mean(g)
 
     for i in eachindex(μ)
-        gi = UvGaussian(μ[i] + maximum(abs, cholrow(g, i)))
-        stepscale =  _scale_step_arg(stepscale, gi, limit[i])
+        gi = UvGaussian(μ[i], maximum(abs, cholrow(g, i)))
+        stepscale =  _scale_step_arg(stepscale, limit[i], gi)
     end
 
     return stepscale 
 end
 
 function _scale_step_arg(stepscale::T, limit::Number, g::UvGaussian) where T <: Number
-    ϵ = 128*eps(g.μ) #Ensure step is large enough for sufficient machine precision
+    ϵ = 1e-12 #Ensure step is large enough for sufficient machine precision
     z = abs(limit - g.μ)/g.σ #Limit distance with respect to standard deviations 
     zc = max(ϵ, z*(1 + inv(z+1))/2) #Corrected distance that approaches the limit, but stops short
     newscale = convert(T, zc)

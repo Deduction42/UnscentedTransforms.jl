@@ -1,27 +1,40 @@
 ToDo:
-1.  Update UKF model constructors to includ MvGaussian in the noise model (to leverage its constructors)
-    -   NonLinearPredictor(f, ε::MvGaussian, θ::SigmaParams)
-    -   LinearPredictor(A::AbstractMatrix, B::AbstractMatrix, ε::MvGaussian)
+1.  Revamp the model and scaling to constrain each sigma point individually
+    1.  Remove the mean reference and use the first sigma point P[begin] as the reference and sum over P[(begin+1):end]
+        -   This ensures that the covariance matrix is positive definite
+    2.  Revamp the parameterization to use the original κ parameter or α which maps directly to κ through
+        -   α = (n+κ)/n = 1 + κ/n 
+                => κ = (α-1)*n
+        -   SigmaParams only contains the κ field
+    3.  SigmaWeights should be an indexable vector to retrieve SigmaWeights
+        -   Only contains "w0::Number", "wi::AbstractVector (one-based)" and "N::Integer"
+        -   Both SigmaWeights and SigmaPoints should start at index 0 which is a special index
+            -   firstindex(X::SigmaPoints), firstindex(w::SigmaWeights) = 0 
+            -   lastindex(X::SigmaPoints), lastindex(w::SigmaWeights) = 2*w.N
+            -   size(X.SigmaPoints) size(w::SigmaWeights) = (2*w.N+1)
+        -   When creating sigma points, the distance must be sqrt(1/(2w[i]))
+            -   X[i] = μ + di*stdcol(x, i)
+            -   w[i] = 1/(2*di^2) => di = sqrt(1/(2w[i]))
+        -   Can calculate sqrt(1/(2w[i])) on-the-fly because it's only used once when generating
+    4.  Scaling SigmaWeights should happen at construction
+        -   SigmaWeights(f, x::AbstractGaussian, κ::SigmaParams)
+        -   SigmaWeights(lims::DomainLimits, x::AbstractGaussian, κ::SigmaParams)
+            -   wi is a ConstVec(1/(2*di^2)) if lims is ArgLimits{0}
 
-2.  Extend `gaussian(f, weights, args...)` on all argument types and build scaling rules more deeply into the UKF
-    1.  Create scaling methods for SigmaParams too (UKF defines params not weights)
+2.  Build out "uncented" function and test it over a variety of alpha values
+    -   unscented(f, x::MvGausian, θ::SigmaParams)
 
-    2.  Scale pred.θ before producing SigmaPoints(θ, x) near line 78 in AbstractPredictor
-        -   ensure "arglims = domainlimits(pred.f, meantype(x))" produces a single ArgLimits
-        -   Use "θ = scale_spread(arglims, pred.θ, x)" then call "predict(pred.f, SigmaPoints(θ, x), u) + pred.ε"
-
-
-
-3.  Validate updated UKF in the same existing project and verify results
-
-4.  Code Cleanup:
+3.  Code Cleanup:
     -   Merge code from _AbstractPredictor.jl into _StateSpaceModel.jl (AbstractPredictor only belongs to StateSpaceModel)
     -   Separate out "sigmapoints.jl" and "gaussian.jl" as two separate files 
     -   Name changes in sigmapoints.jl and gaussian.jl
-        -   "Σ" to "σ" to emphasize square-root form 
-        -   add_cov to sumstd, (along with sumstd_left, sumstd_right) to emphasize squre-root result
+        -   add_cov to gaussadd, (along with gaussaddleft, gaussaddright) to emphasize squre-root result
 
-5.  May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
+4.  May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
+
+5.  Build out @uncertain macros 
+
+6.  Build out documentation
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"

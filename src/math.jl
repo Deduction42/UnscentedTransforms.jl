@@ -22,7 +22,7 @@ Base.:-(g1::MvGaussian, g2::MvGaussian) = MvGaussian(mean(g1) - mean(g2), add_co
 
 function Base.:-(X::SigmaPoints, g::MvGaussian) 
     μx = mean(X)
-    return MvGaussian(mean(g) - μx, add_cov(g.Σ, X, μx))
+    return MvGaussian(mean(g) - μx, add_cov(std(g), X, μx))
 end
 Base.:-(g::MvGaussian, X::SigmaPoints) = g - X
 
