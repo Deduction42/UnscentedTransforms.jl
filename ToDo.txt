@@ -1,6 +1,6 @@
 ToDo:
 1.  Revamp the model and scaling to constrain each sigma point individually
-    1.  Remove the mean reference and use the first sigma point P[begin] as the reference and sum over P[(begin+1):end]
+    1.  (done) Remove the mean reference and use the first sigma point P[begin] as the reference and sum over P[(begin+1):end]
         -   This ensures that the covariance matrix is positive definite
     2.  Revamp the parameterization to use the original κ parameter or α which maps directly to κ through
         -   α = (n+κ)/n = 1 + κ/n 
