@@ -53,7 +53,7 @@ end
 
     Px  = SigmaPoints(θ, Gx)
     Py  = SigmaPoints(θ, Gy)
-    Pyh = SigmaPoints(source=map(i->C*Px[i], eachindex(Px)), weights=Px.weights)
+    Pyh = map(x->C*x, Px)
 
     #Test round-trip conversionlas
     Pxh = SigmaPoints(source=collect(Px), weights=Px.weights)

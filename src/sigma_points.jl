@@ -111,6 +111,9 @@ dimlength(x::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}) = length(x.source)
 
 #If source is a vector, simply index it
 Base.getindex(X::SigmaPoints{<:AbstractVector}, i::Int) = X.source[i+1]
+Base.setindex!(X::SigmaPoints{<:AbstractVector}, v, i::Int) = setindex!(X.source, v, i)
+Base.similar(X::SigmaPoints{<:AbstractGaussian}) = SigmaPoints(X.weights, Vector{eltype(X)}(undef, length(X)))
+Base.similar(X::SigmaPoints, ::Type{S}, dims::Tuple{UnitRange}) where S = SigmaPoints(X.weights, Vector{S}(undef, length(dims[begin])))
 
 #If source is a Gaussian, generate the sigma point
 function Base.getindex(X::SigmaPoints{<:AbstractGaussian}, i::Int)

@@ -186,15 +186,14 @@ function predict(pred::NonlinearPredictor, x::MvGaussian, u)
 end
 
 #Inner predict tunction that is applied directly to sigma points without additive noise
-function predict(fu, X::SigmaPoints, u; multithreaded=false)
-    f(i) = fu(X[i], u)
-    f_task(i) = Threads.@spawn(fu(X[i], u))
-    inds = eachindex(X)
+function predict(fxu, X::SigmaPoints, u; multithreaded=false)
+    fx(x) = fxu(x, u)
+    ftask(i) = Threads.@spawn(fxu(X[i], u))
 
     if multithreaded
-        return SigmaPoints(X.weights, fetch.(map(f_task, inds)))
+        return SigmaPoints(X.weights, fetch.(map(ftask, eachindex(X))))
     else
-        return SigmaPoints(X.weights, map(f, inds))
+        return map(fx, X)
     end
 end
 
