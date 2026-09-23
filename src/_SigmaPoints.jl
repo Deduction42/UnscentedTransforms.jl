@@ -305,13 +305,11 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
         error("Two sets of sigma points must have the same number of points ($(nx) ≠ $(ny))")
     end
 
-    (μx, μy) = (mean(X), mean(Y))
+    (μx, μy) = (X[begin], Y[begin])
     T = promote_type(Float64, eltype(μx), eltype(μy))
     S = zeros(T, length(μx), length(μy))
-    ii = 0
-    for (x, y) in zip(X, Y)
-        ii += 1
-        S .+= weight(ii) .* (x.-μx) .* (y.-μy)'
+    for i in eachindex(X)
+        S .+= weight(i) .* (X[i].-μx) .* (Y[i].-μy)'
     end
     return S
 end
@@ -351,15 +349,12 @@ Returns the square-root form of adding covariances
 function add_cov end
 
 add_cov(ch::Cholesky, X::SigmaPoints) = add_cov!(copy(ch), X)
-add_cov(d::Diagonal, X::SigmaPoints) = add_cov!(diag2chol(d), X, mean(X))
-add_cov(ch::Cholesky, X::SigmaPoints, μ::AbstractVector) = add_cov!(copy(ch), X, μ)
-add_cov(d::Diagonal, X::SigmaPoints, μ::AbstractVector) = add_cov!(diag2chol(d), X, μ)
+add_cov(d::Diagonal, X::SigmaPoints) = add_cov!(diag2chol(d), X)
 
-add_cov!(ch::Cholesky, X::SigmaPoints) = add_cov!(ch, X, mean(X))
-
-function add_cov!(ch::Cholesky, X::SigmaPoints, μ::AbstractVector)
+function add_cov!(ch::Cholesky, X::SigmaPoints)
     (w0, wn) = (X.weights.Wσ, X.weights.Wn)
-    x = zeros(eltype(X[begin]), length(X[begin]))
+    x = zeros(eltype(X[begin]), length(X[begin])) #Temporary storage vector that gets destroyed
+    μ = X[begin] #Using first element of mean is "modified UKF" form which guarantees proper covariance
 
     #Add all of the surrounding points
     for ii in (firstindex(X)+1):lastindex(X)
@@ -367,17 +362,11 @@ function add_cov!(ch::Cholesky, X::SigmaPoints, μ::AbstractVector)
         chol_update!(ch, x, wn)
     end
 
-    #Add central point (where weight could be negative) 
-    #Because of negative weight, doing this last reduces risk of negative covariacne
-    x .= X[begin] .- μ
-    chol_update!(ch, x, w0)
-
     return ch
 end
 
 add_cov(ch1::Cholesky, ch2::Cholesky) = add_cov!(copy(ch1), ch2)
 add_cov(x1::Number, x2::Number) = sqrt(abs2(x1) + abs2(x2))
-
 
 function add_cov!(ch1::Cholesky, ch2::Cholesky)
     x = zeros(eltype(ch2.U), size(ch2.U, 1))

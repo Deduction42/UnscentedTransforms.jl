@@ -171,24 +171,26 @@ end
 Prediction functions (uncertainty propagation)
 =======================================================================================================================#
 
-#Linear predictors
+#Linear predictors with additive noise
 function predict(pred::LinearPredictor, X::MvGaussian, u)
     xh = pred.A*X.μ + pred.B*u 
     Σh = add_lcov(std(pred.ε), pred.A*std(X).L)
     return MvGaussian(xh, Σh)
 end
 
-#Nonlinar predictors (returns the same type as X)
+#Nonlinar predictors with additive noise (produces an MvGaussian)
 function predict(pred::NonlinearPredictor, x::MvGaussian, u)
     θ = scale_spread(pred.f, pred.θ, x)
-    return predict(pred, SigmaPoints(θ, x), u) + pred.ε
+    Xp = predict(pred.f, SigmaPoints(θ, x), u, multithreaded=pred.multithreaded)
+    return Xp + pred.ε #Addition of noise converts sigma points to MvGaussian
 end
 
-function predict(pred::NonlinearPredictor, X::SigmaPoints, u)
-    f(x) = pred.f(x, u)
-    f_task(x) = Threads.@spawn(pred.f(x,u))
+#Inner predict tunction that is applied directly to sigma points without additive noise
+function predict(fu, X::SigmaPoints, u; multithreaded=false)
+    f(x) = fu(x, u)
+    f_task(x) = Threads.@spawn(fu(x, u))
 
-    if pred.multithreaded
+    if multithreaded
         return SigmaPoints(X.weights, fetch.(map(f_task, X)))
     else
         return SigmaPoints(X.weights, map(f, X))
@@ -231,7 +233,7 @@ function update(obs::NonlinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVect
     Xp = SigmaPoints(obs.θ, x)
 
     #Propagate the sigma points through the predictor
-    Yp = predict(obs, Xp, u)
+    Yp = predict(obs.f, Xp, u, multithreaded=obs.multithreaded)
     Y  = Yp + obs.ε #Predicted Y distribution
     Z  = MvGaussian(y .- mean(Y), std(Y)) #Innovation distribution
 
