@@ -201,7 +201,8 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
     inds = (firstindex(X)+1):lastindex(X)
 
     for i in inds
-        S .+= w[i] .* (X[i].-μx) .* (Y[i].-μy)'
+        (wi, xi, yi) = (w[i], X[i], Y[i])
+        S .+= wi .* (xi.-μx) .* (yi.-μy)'
     end
     return S
 end
