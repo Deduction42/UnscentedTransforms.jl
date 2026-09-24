@@ -201,7 +201,9 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
     inds = (firstindex(X)+1):lastindex(X)
 
     for i in inds
-        (wi, xi, yi) = (w[i], X[i], Y[i])
+        wi = w[i]
+        xi = X[i]
+        yi = Y[i]
         S .+= wi .* (xi.-μx) .* (yi.-μy)'
     end
     return S
@@ -210,7 +212,7 @@ end
 function std(X::SigmaPoints{<:AbstractVector{<:AbstractVector}}) 
     x0 = X[begin]
     nd = dimlength(X) 
-    ch = Cholesky(UpperTriangular(zeros(eltype(x0), nd, nd)))
+    ch = Cholesky(LowerTriangular(zeros(eltype(x0), nd, nd)))
     add_cov!(ch, X)
     return ch 
 end
@@ -264,7 +266,7 @@ add_cov(ch1::Cholesky, ch2::Cholesky) = add_cov!(copy(ch1), ch2)
 add_cov(x1::Number, x2::Number) = sqrt(abs2(x1) + abs2(x2))
 
 function add_cov!(ch1::Cholesky, ch2::Cholesky)
-    x = zeros(eltype(ch2.U), size(ch2.U, 1))
+    x = zeros(eltype(ch2.L), size(ch2.L, 1))
 
     for xi in eachcol(ch2.L)
         x .= xi
@@ -305,7 +307,7 @@ function add_rcov(A::AbstractMatrix, B::AbstractMatrix)
             R[ii,:] .= flipsign.(R[ii,:], -1)
         end
     end
-    return Cholesky(UpperTriangular(R))
+    return Cholesky(LowerTriangular(R'))
 end
 
 
@@ -356,7 +358,7 @@ function chol_update!(ch::Cholesky, x::Vector, w::Real)
 end
 
 
-diag2chol(d::Diagonal) = Cholesky(UpperTriangular(Matrix(d)))
+diag2chol(d::Diagonal) = Cholesky(LowerTriangular(Matrix(d)))
 
 chol_var(ch::Cholesky) = map(ii->chol_var(ch, ii), axes(ch.U, 2))
 chol_std(ch::Cholesky) = map(ii->chol_std(ch, ii), axes(ch.U, 2))
@@ -368,4 +370,4 @@ function chol_var(ch::Cholesky, ii::Integer)
 end
 
 
-Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.σ.U)
+Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.σ.L)
