@@ -198,7 +198,7 @@ end
 
 #Used to find the spread factor δ for a single element of a sigma point, returns a minimum
 function _scale_spread(δ::T, arglims::ArgLimits{N,<:Number}, g::UvGaussian) where {N, T<:Number}
-    ϵ = 0.1
+    ϵ = 1e-6
 
     iszero(g.σ) && return max(ϵ, δ) #Return old value if standard deviation is zero
 
