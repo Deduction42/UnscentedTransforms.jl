@@ -71,12 +71,16 @@ end
     @test std(MvGaussian(Px, Cx)).U ≈ cholesky(Sx).U
 end
 
-#=
 @testset "Sigma Point Scaling" begin 
+    (μ1, σ1) = (0.1, 1.0)
+    (μ2, σ2) = (1.0, 0.1)
+    x1 = μ1 ± σ1 
+    x2 = μ2 ± σ2
+
     #Scaling close to a domain limit 
     w = SigmaWeights(1, SigmaParams())
-    w2 = scale_spread(inv, w, x1)
-    @test w2.rc < abs(0-mean(x1))/std(x1) #Step must be less than the standard deviation distance to zero
+    w2 = scale_weights(inv, w, x1)
+    @test sqrt(0.5/w2[1]) <= abs(0-mean(x1))/std(x1) #Step must be less than the standard deviation distance to zero
     @test all(d->d>0, SigmaPoints(weights=w2, source=x1)) #No sigma points should cross the 0 threshold
     
 
@@ -85,18 +89,34 @@ end
     x2 = 0.2 ± 2.0 
     x3 = 0.3 ± 3.0 
 
-    prod3inv(x1, x2, x3) = inv(x1*x2*x3)
+    prod3inv(x1::Number, x2::Number, x3::Number) = inv(x1*x2*x3)
     UnscentedTransforms.domainlimits(f::typeof(prod3inv)) = (ArgLimits(0), ArgLimits(0), ArgLimits(0))
     
     X1 = SigmaPoints(SigmaParams(), x1, x2, x3)
     w1 = X1.weights
-    w2 = scale_spread(prod3inv, w1, x1, x2, x3)
+    w2 = scale_weights(prod3inv, w1, x1, x2, x3)
     X2 = SigmaPoints(w2, x1, x2, x3)
 
     @test !all(v-> all(x-> x>0, v), X1) #Some of the new points cross the threshold
     @test all(v-> all(x-> x>0, v), X2) #None of the new points cross the threshold
+
+    #Use a multivariate distribution for the same thing 
+    prodinv3(x::SVector{3}) = inv(prod(x))
+    UnscentedTransforms.domainlimits(f::typeof(prodinv3)) = ArgLimits(SVector(0,0,0))
+
+    xm = MvGaussian(x1, x2, x3)
+    X1 = SigmaPoints(SigmaParams(), xm)
+    w1 = X1.weights
+    w2 = scale_weights(prodinv3, w1, xm)
+    X2 = SigmaPoints(w2, xm)
+    X3 = SigmaPoints(w2, collect(X2))
+    xh = MvGaussian(X3)
+
+    @test !all(v-> all(x-> x>0, v), X1) #Some of the new points cross the threshold
+    @test all(v-> all(x-> x>0, v), X2) #None of the new points cross the threshold
+    @test std(xh).L ≈ std(xm) #Test round-trip conversion with altered weights
+
 end
-=#
 
 
 @testset "State Space" begin

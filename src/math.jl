@@ -36,7 +36,7 @@ gaussian(f, θ::SigmaParams, args::UvGaussian...) = gaussian(f, SigmaWeights(len
 
 function gaussian(f, θ::SigmaWeights, args::UvGaussian...)
     Np = 2*length(args) + 1
-    θ  = scale_spread(f, θ, args...)
+    θ  = scale_weights(f, θ, args...)
 
     old_points = SigmaPoints(θ, args...)
     indvec = SVector{Np}(firstindex(old_points):lastindex(old_points))

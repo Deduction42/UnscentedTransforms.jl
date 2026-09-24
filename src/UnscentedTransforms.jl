@@ -6,5 +6,5 @@ module UnscentedTransforms
     include("_StateSpaceModel.jl")
     
     export StateSpaceModel, LinearPredictor, NonlinearPredictor, MvGaussian, UvGaussian, SigmaPoints, SigmaParams, SigmaWeights, ArgLimits
-    export kalman_filter!, predict, predict!, update, update!, gaussian, ±, scale_spread, correlated
+    export kalman_filter!, predict, predict!, update, update!, gaussian, ±, scale_weights, correlated
 end

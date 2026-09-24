@@ -180,8 +180,8 @@ end
 
 #Nonlinar predictors with additive noise (produces an MvGaussian)
 function predict(pred::NonlinearPredictor, x::MvGaussian, u)
-    θ = scale_spread(pred.f, pred.θ, x)
-    Xp = predict(pred.f, SigmaPoints(θ, x), u, multithreaded=pred.multithreaded)
+    w  = scale_weights(pred.f, pred.θ, x)
+    Xp = predict(pred.f, SigmaPoints(w, x), u, multithreaded=pred.multithreaded)
     return Xp + pred.ε #Addition of noise converts sigma points to MvGaussian
 end
 

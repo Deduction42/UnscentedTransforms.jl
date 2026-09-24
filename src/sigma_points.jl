@@ -54,10 +54,10 @@ function SigmaWeights(N::Integer, κ::SigmaParams)
         error("either α or κ must be set to a non-Nan value")
     end
 
-    wi = ConstVec(1/(2*abs2(δ)))
-    w0 = 1 - 2*N*wi[1]
+    wi = 0.5/abs2(δ)
+    w0 = 1 - 2*N*wi
 
-    return SigmaWeights(N=N, w0=w0, wi=wi)
+    return SigmaWeights(N=N, w0=w0, wi=ConstVec(wi))
 end
 
 SigmaWeights(θ::SigmaWeights) = θ
@@ -66,7 +66,7 @@ Base.IndexStyle(::Type{<:SigmaWeights}) = IndexLinear()
 Base.size(w::SigmaWeights) = (2*w.N + 1,)
 Base.firstindex(w::SigmaWeights) = 0
 Base.lastindex(w::SigmaWeights) = 2*w.N
-Base.getindex(w::SigmaWeights, i::Int) = ifelse(iszero(i), w.w0, w.wi[i])
+Base.getindex(w::SigmaWeights, i::Int) = iszero(i) ? w.w0 : w.wi[i]
 Base.axes(w::SigmaWeights) = map(n->0:(n-1), size(w))
 Base.has_offset_axes(w::SigmaWeights) = true
 
@@ -104,6 +104,7 @@ Base.has_offset_axes(obj::SigmaPoints) = true
 halfindex(x::SigmaPoints) = x.weights.N
 dimlength(x::AbstractGaussian) = length(mean(x))
 dimlength(x::UvGaussian) = 1
+dimlength(tx::Tuple{Vararg{<:AbstractGaussian}}) = sum(dimlength, tx, init=0)
 dimlength(X::SigmaPoints{<:AbstractGaussian}) = length(X.source)
 dimlength(X::SigmaPoints{<:UvGaussian}) = 1
 dimlength(X::SigmaPoints{<:AbstractVector}) = length(X.source[begin])
@@ -137,7 +138,7 @@ function Base.getindex(X::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}, i::Int)
     μ = map(mean, X.source)
     i == firstindex(X) && return μ
 
-    δ  = sqrt(0.5/w[i])
+    δ = sqrt(0.5/X.weights[i])
 
     if firstindex(X) < i <= halfindex(X)
         iμ = i
@@ -178,7 +179,7 @@ function mean(X::SigmaPoints{<:AbstractVector})
 end
 
 function mean(X::SigmaPoints{<:AbstractVector{<:Number}}) 
-    w = x.weights
+    w = X.weights
     return sum(ind-> w[ind]*X[ind], eachindex(X))
 end
 
