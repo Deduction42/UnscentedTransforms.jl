@@ -1,11 +1,8 @@
 ToDo:
 1.  UKF works when scaling is not applied, but we are still experiencing trouble with individual scaling
-    -   Currently, the epsilon is set to 0.1 which is very large
-        -   Was neccessary for numerical stability of another project
-        -   May want to see if we can decrese it before the following tests
-    -   Test reconstruction from scaling with more complicated covariance structures
-        -   Try different alpha parameters too 
-    -   Test reconstruction performance of complicated covariances when mean is extremely close to the boundaries
+    -   Add scale_limit field to SigmaParams and SigmaWeights to limit the scale of weight changes 
+        -   This should be enforced at the _scaled_weigts function (which still has access to SigmaWeights objects)
+    -   Make the MvGaussian constructor use the L version of the covariance structure
 
 2.  Build out "uncented" function and test it over a variety of alpha values
     -   unscented(f, x::MvGausian, θ::SigmaParams)

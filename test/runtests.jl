@@ -116,6 +116,35 @@ end
     @test all(v-> all(x-> x>0, v), X2) #None of the new points cross the threshold
     @test std(xh).L ≈ std(xm) #Test round-trip conversion with altered weights
 
+
+    #Use a more complicated scaling rule
+    prodinv(x::AbstractVector) = inv(prod(x))
+    UnscentedTransforms.domainlimits(f::typeof(prodinv), ::Type{<:StaticVector{N}}) where N = ArgLimits(zero(SVector{N,Float64}))
+
+    Random.seed!(54321)
+    data = randn(100,5)*rand(5,5)
+    σ = cholesky(cov(data))
+
+    #Test far away from the limits
+    x0 = MvGaussian(5 .+ zero(SVector{5}), σ.L)
+    Xp = map(identity, SigmaPoints(scale_weights(prodinv, SigmaParams(), x0), x0))
+    xh = MvGaussian(Xp)
+
+    @test all(v-> all(x-> x>0, v), Xp) #None of the new points cross the threshold
+    @test mean(xh) ≈ mean(x0)
+    @test std(xh).L ≈ std(x0).L
+
+    #Test moderately close to the limits
+    x0 = MvGaussian(0.1 .+ zero(SVector{5}), σ.L)
+    Xp = map(identity, SigmaPoints(scale_weights(prodinv, SigmaParams(), x0), x0))
+    xh = MvGaussian(Xp)
+
+    @test all(v-> all(x-> x>0, v), Xp) #None of the new points cross the threshold
+    @test mean(xh) ≈ mean(x0)
+    @test std(xh).L ≈ std(x0).L
+
+
+
 end
 
 
