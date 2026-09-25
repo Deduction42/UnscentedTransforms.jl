@@ -10,7 +10,7 @@ Post cleanup:
 
 
 """
-SigmaParams(α=1.0, κ=0.0)
+SigmaParams(α=1.0, κ=0.0, αmin=1e-6)
 
 Sigma point parameters for the Unscented Transform. The inner value is κ which denotes a constant offest form the dimension 
 (as defined in the classical single-value parameterization). There is an option to set α instead which is a distance scalar 
@@ -18,19 +18,25 @@ Sigma point parameters for the Unscented Transform. The inner value is κ which 
 α=1 (or equivalently κ=0) so that points envelope ~50% of the distribution. Smaller values of α result in tighter-clumped 
 values around the mean which can help with constraints. This package also uses autoscaling to help obey constraints which 
 encourages users to do two things:
-1. Clamp values inside the function as a first step 
-2. Define asymptotes/domain boundaries of functions if they exist
+
+1. Clamp values inside the function as a first step (projection)
+2. Define asymptotes/domain boundaries of functions if they exist (used for scaling)
+
+Due to computational precision issues, an optional αmin parameter is provided. A value of 1e-6 is a good balance for Float64 
+it is large enough to enough precision on (1-αmin^2) while being small enough to obey most constraints without clamping/projection. 
+If estimates are unstable, αmin may need to be increased at the cost of relying more on clamping/projection.
 """
 struct SigmaParams
     κ :: Float64
     α :: Float64
+    αmin :: Float64
 end
 
-function SigmaParams(; κ=0.0, α=NaN)
-    return isfinite(α) ? SigmaParams(NaN, α) : SigmaParams(κ, NaN) 
+function SigmaParams(; κ=0.0, α=NaN, αmin=1e-6)
+    return isfinite(α) ? SigmaParams(NaN, α, αmin) : SigmaParams(κ, NaN, αmin) 
 end
 
-SigmaParams(κ::Number) = SigmaParams(κ, NaN)
+SigmaParams(κ::Number) = SigmaParams(κ, NaN, 1e-6)
 
 
 """
@@ -41,7 +47,8 @@ Generates a vector-like object of SigmaWeights from a dimension number N and the
 Base.@kwdef struct SigmaWeights{V<:Union{ConstVec{Float64},AbstractVector{Float64}}} <: AbstractVector{Float64}
     N  :: Int
     w0 :: Float64
-    wi :: V 
+    wi :: V
+    αmin :: Float64
 end
 
 function SigmaWeights(N::Integer, κ::SigmaParams)
@@ -57,7 +64,7 @@ function SigmaWeights(N::Integer, κ::SigmaParams)
     wi = 0.5/abs2(δ)
     w0 = 1 - 2*N*wi
 
-    return SigmaWeights(N=N, w0=w0, wi=ConstVec(wi))
+    return SigmaWeights(N=N, w0=w0, wi=ConstVec(wi), αmin=κ.αmin)
 end
 
 SigmaWeights(θ::SigmaWeights) = θ

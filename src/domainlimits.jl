@@ -155,30 +155,30 @@ scale_weights(current::SigmaWeights, arglims::DomainLimits, args::AbstractGaussi
 
 #Used to find the sigma weights for a correlated multivariate distribution 
 function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::ArgLimits{<:Any,<:AbstractVector}, arg::MvGaussian)
-    #Closure to wrap a single index
-    _scale_weight_closure(i::Integer) = _scale_weight(w.wi.all, arglims, mean(arg), cholcol(arg, i))
+    #Closure to calcualte new weight (clamped by w.αmin) given an index
+    _scale_weight_closure(i::Integer) = min(w.wi.all/w.αmin, _scale_weight(w.wi.all, arglims, mean(arg), cholcol(arg, i)))
 
     vw = map(_scale_weight_closure, similar_indices(mean(arg)))
     w0 = 1 - 2*sum(vw)
-    return SigmaWeights(w.N, w0, [vw; vw])
+    return SigmaWeights(w.N, w0, [vw; vw], w.αmin)
 end
 
 #Used to find the sigma weights for a set of uncorrelated variables
 function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::Tuple{Vararg{ArgLimits{<:Any,<:Number}}}, args::UvGaussian...)
-    #Closure to calculate a new weight from the scaled spread
-    _scale_weight_closure(xlims, x) =_scale_weight(w.wi.all, xlims, x)
+    #Closure to calculate a new weight (clamped by w.αmin) for each independent variable and its corresponding limits
+    _scale_weight_closure(xlims, x) = min(w.wi.all/w.αmin, _scale_weight(w.wi.all, xlims, x))
 
     length(arglims) == length(args) || throw(DimensionMismatch("Arguments must have the same length (recieved $(arglims), $(args))"))
     vw = SVector(map(_scale_weight_closure, arglims, args))
     w0 = 1 - 2*sum(vw)
-    return SigmaWeights(w.N, w0, [vw; vw])
+    return SigmaWeights(w.N, w0, [vw; vw], w.αmin)
 end
 
 #Used to find the sigma weights for a single variable 
 function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::ArgLimits, arg::UvGaussian)
     wi = _scale_weight(w.wi.all, arglims, arg)
     w0 = 1 - 2*wi 
-    return SigmaWeights(w.N, w0, SVector(wi, wi))
+    return SigmaWeights(w.N, w0, SVector(wi, wi), w.αmin)
 end
 
 #Used to convert spread to weights 
@@ -200,17 +200,15 @@ end
 
 #Used to find the spread factor δ for a single element of a sigma point, returns a minimum
 function _scale_spread(δ::T, arglims::ArgLimits{N,<:Number}, g::UvGaussian) where {N, T<:Number}
-    ϵ = 1e-6
-    iszero(g.σ) && return max(ϵ, δ) #Return old value if standard deviation is zero
+    iszero(g.σ) && return δ #Return old value if standard deviation is zero
 
     #Calculate a distribution based on the distance between the mean and the limit
     Δmin = minimum(x->abs(x-g.μ), arglims.list)
     Δlim = UvGaussian(Δmin, g.σ)
     δnew = convert(T, gamma_scale(abs(Δlim.μ)/Δlim.σ))
-    δmin = ifelse(δnew < δ, δnew, δ) #Strict minimum that ignores NaN
     #display((Δmin=Δmin, Δlim=Δlim, δnew=δnew, arglims=arglims))
 
-    return max(ϵ, δmin)
+    return ifelse(δnew < δ, δnew, δ) #Strict minimum that ignores NaN
 end
 
 gamma_scale(z::Number) = z*(1 + inv(z+1))/2
