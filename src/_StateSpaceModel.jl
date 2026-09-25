@@ -180,20 +180,20 @@ end
 
 #Nonlinar predictors with additive noise (produces an MvGaussian)
 function predict(pred::NonlinearPredictor, x::MvGaussian, u)
-    θ = scale_spread(pred.f, pred.θ, x)
-    Xp = predict(pred.f, SigmaPoints(θ, x), u, multithreaded=pred.multithreaded)
+    w  = scale_weights(pred.f, pred.θ, x)
+    Xp = predict(pred.f, SigmaPoints(w, x), u, multithreaded=pred.multithreaded)
     return Xp + pred.ε #Addition of noise converts sigma points to MvGaussian
 end
 
 #Inner predict tunction that is applied directly to sigma points without additive noise
-function predict(fu, X::SigmaPoints, u; multithreaded=false)
-    f(x) = fu(x, u)
-    f_task(x) = Threads.@spawn(fu(x, u))
+function predict(fxu, X::SigmaPoints, u; multithreaded=false)
+    fx(x) = fxu(x, u)
+    ftask(i) = Threads.@spawn(fxu(X[i], u))
 
     if multithreaded
-        return SigmaPoints(X.weights, fetch.(map(f_task, X)))
+        return SigmaPoints(X.weights, fetch.(map(ftask, eachindex(X))))
     else
-        return SigmaPoints(X.weights, map(f, X))
+        return map(fx, X)
     end
 end
 

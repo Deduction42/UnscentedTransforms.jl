@@ -1,3 +1,24 @@
+#================================================================================================================================
+Implements a sigma point scaling algorithm that keeps all the points within a boxed set of constraints
+This is commonly used to force positive values on states/parameters that aren't naturally constrained by the predictor functions 
+This algorithm ATTEMPTS to keep points inside the constraints, but numerical precision/stability issues may prevent this
+if the mean is very close to a constraint. The underlying function should enforce contstraints. This may introduce some distribution
+error, but it will be far less than the error introduced by not scaling the points.
+
+The algorithm works as follows:
+For each off-center sigma weight w[1:end]
+    1.  Translate the weight into a point-distance scalar δ (where δ = sqrt(0.5/w[i]))
+    2.  Find the minimum distance Δu between μ[i] and lim[i] for all boundaries in lim
+    3.  Calcualte vδ[i] = gamma_scale(Δu[i]/σ[i])
+        -   gamma_scale(z) converts the quantile of a standard normal distribution to an equivalent gamma quantile that fits a boundary
+        -   gamma_scale(z) ≈ z*(1 + inv(z+1))/2 as a current approximation (better ones probably exist, use Symbolic Regression in the future)
+    4.  Return δnew = max(minimum(vδ, init=δ), ϵ)
+        -   minimum should use a function "f(i)" to generate vδ for each index i
+    5.  Convert δnew to wnew[i], wnew[i+N] = 0.5/abs2(δ)
+    6.  Calcualte a new w0 = 1 - sum(wnew)
+
+================================================================================================================================#
+
 """
 ArgLimits(args...)
 
@@ -122,16 +143,97 @@ domainlimits(f::typeof(asin), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
 domainlimits(f::typeof(acos), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
 
 
-function scale_spread(f, current::Union{SigmaWeights,SigmaParams}, gs::AbstractGaussian...) 
-    limits = domainlimits(f, map(meantype, gs)...)
-    (limits isa DomainLimits) || error("domainlimits($(f)) must return an `ArgLimits` or a tuple of htem, instead it returned $(limits)")
-    return scale_spread(limits, current, gs...)
+function scale_weights(f, current::Union{SigmaParams, SigmaWeights}, args::AbstractGaussian...) 
+    limits = domainlimits(f, map(meantype, args)...)
+    (limits isa DomainLimits) || error("domainlimits($(f)) must return an `ArgLimits` or a tuple of them, instead it returned $(limits)")
+    return scale_weights(current, limits, args...)
 end
 
+scale_weights(current::SigmaParams, arglims::DomainLimits, args::AbstractGaussian...) = scale_weights(SigmaWeights(dimlength(args), current), arglims, args...)
+scale_weights(current::SigmaWeights, arglims::ArgLimits{0}, args::AbstractGaussian...) = current #No-op shortcut
+scale_weights(current::SigmaWeights, arglims::DomainLimits, args::AbstractGaussian...) = _scaled_weights(current, arglims, args...)
+
+#Used to find the sigma weights for a correlated multivariate distribution 
+function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::ArgLimits{<:Any,<:AbstractVector}, arg::MvGaussian)
+    #Closure to wrap a single index
+    _scale_weight_closure(i::Integer) = _scale_weight(w.wi.all, arglims, mean(arg), cholcol(arg, i))
+
+    vw = map(_scale_weight_closure, similar_indices(mean(arg)))
+    w0 = 1 - 2*sum(vw)
+    return SigmaWeights(w.N, w0, [vw; vw])
+end
+
+#Used to find the sigma weights for a set of uncorrelated variables
+function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::Tuple{Vararg{ArgLimits{<:Any,<:Number}}}, args::UvGaussian...)
+    #Closure to calculate a new weight from the scaled spread
+    _scale_weight_closure(xlims, x) =_scale_weight(w.wi.all, xlims, x)
+
+    length(arglims) == length(args) || throw(DimensionMismatch("Arguments must have the same length (recieved $(arglims), $(args))"))
+    vw = SVector(map(_scale_weight_closure, arglims, args))
+    w0 = 1 - 2*sum(vw)
+    return SigmaWeights(w.N, w0, [vw; vw])
+end
+
+#Used to find the sigma weights for a single variable 
+function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::ArgLimits, arg::UvGaussian)
+    wi = _scale_weight(w.wi.all, arglims, arg)
+    w0 = 1 - 2*wi 
+    return SigmaWeights(w.N, w0, SVector(wi, wi))
+end
+
+#Used to convert spread to weights 
+function _scale_weight(w::T, args...) where T<:Number 
+    δ = sqrt(0.5/w)
+    return convert(T, 0.5/abs2(_scale_spread(δ, args...)))
+end
+
+#Used to find the spread factor δ for a single sigma point
+function _scale_spread(δ::T, arglims::ArgLimits{N,<:AbstractVector}, μ::AbstractVector, σ::AbstractVector) where {N, T<:Number}
+    for i in eachindex(μ)
+        ithlims = ith_arglims(arglims, i)
+        δ = convert(T, _scale_spread(δ, ithlims, UvGaussian(μ[i], σ[i])))
+    end 
+    return δ
+end
+
+#Used to find the spread factor δ for a single element of a sigma point, returns a minimum
+function _scale_spread(δ::T, arglims::ArgLimits{N,<:Number}, g::UvGaussian) where {N, T<:Number}
+    ϵ = 1e-6
+
+    iszero(g.σ) && return max(ϵ, δ) #Return old value if standard deviation is zero
+
+    Δμ = _bound_distmin_gaussian(arglims, g)
+    return max(ϵ, _bound_scale(δ, Δμ))
+end
+
+#Finds a gausian distribution over the minimum distance from a set of limits
+function _bound_distmin_gaussian(arglims::ArgLimits{N,<:Number}, xi::UvGaussian) where N
+    Δmin = minimum(x->abs(x-xi.μ), arglims.list)
+    return UvGaussian(Δmin, xi.σ)
+end
+
+#Scales a spread factor δ based on the previous value and the distribution over the distances
+function _bound_scale(δ::T, Δμ::UvGaussian) where T <: Number
+    δnew = convert(T, gamma_scale(abs(Δμ.μ)/Δμ.σ))
+
+    #Strict minimum return (returns old value if newscale is NaN)
+    return ifelse(δnew < δ, δnew, δ)
+end
+
+gamma_scale(z::Number) = z*(1 + inv(z+1))/2
+
+function ith_arglims(arglims::ArgLimits{N,<:Union{AbstractVector, Tuple}}, ind::Int) where N
+    return tuple2arglims(map(x->x[ind], arglims.list))
+end
+
+similar_indices(v::AbstractVector) = eachindex(v)
+similar_indices(v::StaticVector{N}) where N = SVector{N}(eachindex(v))
+
+#=
 function scale_spread(limits::DomainLimits, current::SigmaWeights, gs::AbstractGaussian...)
-    rc = current.rc
-    rc2 = _scale_step(rc, limits, gs)
-    return scale_spread(rc2/rc, current)
+    δ  = sqrt(0.5/w[1])
+    δ2 = _scale_step(δ, limits, gs)
+    return scale_spread(δ2/δ, current)
 end
 
 function scale_spread(limits::DomainLimits, current::SigmaParams, gs::AbstractGaussian...)
@@ -206,6 +308,7 @@ function _scale_step_arg(stepscale::T, limit::Number, g::UvGaussian) where T <: 
     #This ifelse statement returns old value if newscale is NaN
     return ifelse(newscale < stepscale, newscale, stepscale)
 end
+=#
 
 #=
 function _min_step_scale(stepscale::Number, limits::Tuple{Vararg{ArgLimits{1,<:Number}, N}}, gs::UvGaussian...) where N

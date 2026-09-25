@@ -1,25 +1,11 @@
 ToDo:
-1.  Revamp the model and scaling to constrain each sigma point individually
-    1.  (done) Remove the mean reference and use the first sigma point P[begin] as the reference and sum over P[(begin+1):end]
-        -   This ensures that the covariance matrix is positive definite
-    2.  Revamp the parameterization to use the original κ parameter or α which maps directly to κ through
-        -   α = (n+κ)/n = 1 + κ/n 
-                => κ = (α-1)*n
-        -   SigmaParams only contains the κ field
-    3.  SigmaWeights should be an indexable vector to retrieve SigmaWeights
-        -   Only contains "w0::Number", "wi::AbstractVector (one-based)" and "N::Integer"
-        -   Both SigmaWeights and SigmaPoints should start at index 0 which is a special index
-            -   firstindex(X::SigmaPoints), firstindex(w::SigmaWeights) = 0 
-            -   lastindex(X::SigmaPoints), lastindex(w::SigmaWeights) = 2*w.N
-            -   size(X.SigmaPoints) size(w::SigmaWeights) = (2*w.N+1)
-        -   When creating sigma points, the distance must be sqrt(1/(2w[i]))
-            -   X[i] = μ + di*stdcol(x, i)
-            -   w[i] = 1/(2*di^2) => di = sqrt(1/(2w[i]))
-        -   Can calculate sqrt(1/(2w[i])) on-the-fly because it's only used once when generating
-    4.  Scaling SigmaWeights should happen at construction
-        -   SigmaWeights(f, x::AbstractGaussian, κ::SigmaParams)
-        -   SigmaWeights(lims::DomainLimits, x::AbstractGaussian, κ::SigmaParams)
-            -   wi is a ConstVec(1/(2*di^2)) if lims is ArgLimits{0}
+1.  UKF works when scaling is not applied, but we are still experiencing trouble with individual scaling
+    -   Currently, the epsilon is set to 0.1 which is very large
+        -   Was neccessary for numerical stability of another project
+        -   May want to see if we can decrese it before the following tests
+    -   Test reconstruction from scaling with more complicated covariance structures
+        -   Try different alpha parameters too 
+    -   Test reconstruction performance of complicated covariances when mean is extremely close to the boundaries
 
 2.  Build out "uncented" function and test it over a variety of alpha values
     -   unscented(f, x::MvGausian, θ::SigmaParams)
