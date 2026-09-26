@@ -1,20 +1,11 @@
 ToDo:
-1.  UKF works when scaling is not applied, but we are still experiencing trouble with individual scaling
-    -   Currently, the epsilon is set to 0.1 which is very large
-        -   Was neccessary for numerical stability of another project
-        -   May want to see if we can decrese it before the following tests
-    -   Test reconstruction from scaling with more complicated covariance structures
-        -   Try different alpha parameters too 
-    -   Test reconstruction performance of complicated covariances when mean is extremely close to the boundaries
+1.  Make the MvGaussian constructor use the L version of the covariance structure
 
 2.  Build out "uncented" function and test it over a variety of alpha values
     -   unscented(f, x::MvGausian, θ::SigmaParams)
 
 3.  Code Cleanup:
-    -   Merge code from _AbstractPredictor.jl into _StateSpaceModel.jl (AbstractPredictor only belongs to StateSpaceModel)
-    -   Separate out "sigmapoints.jl" and "gaussian.jl" as two separate files 
-    -   Name changes in sigmapoints.jl and gaussian.jl
-        -   add_cov to gaussadd, (along with gaussaddleft, gaussaddright) to emphasize squre-root result
+    -   add_cov to sqrtadd2 (along with sqrtadd2left, sqrtadd2right) to emphasize squre-root result
 
 4.  May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
