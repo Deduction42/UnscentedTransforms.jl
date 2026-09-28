@@ -1,14 +1,7 @@
 ToDo:
-1.  Build out "uncented" function and test it over a variety of alpha values
-    -   May want to rename αmin to ϵ
-    -   function unscented(f, θ::SigmaParams, args::AbstractGaussian...) 
-            w = scale_weights(f, θ, args...)
-            X = map(f, SigmaPoints(w, args))
-            return gaussian(X)
-        end
-    -   unscanted(f, args::AbstractGaussian...) = unscented(f, SigmaParams(), args...)
+0.  Change "alphamin to epsilon"
 
-2.  Improve mean precision:
+1.  Improve mean precision:
     -   There may be a way to compensate for a lack of precision around sum(X[i].*w[i], i=1:N) + X[0]*(1-sum(wi))
         -   Maybe X[0] + sum(w[i]*(X[i]-X[0]), 1:N)
         -   Precision now lies with X[i]-X[0] rather than 1 - sum(w, 1:N)
@@ -23,7 +16,7 @@ ToDo:
         -   combine(...) will potentially need to create copies of the Gaussian 
         -   avoid copying (-x) because the negation already creates a copy
 
-3.  Code Cleanup:
+2.  Code Cleanup:
     -   add_cov, may be obsolete
         -   New high-precision combine(+, g::AbstractGaussian, X::SigmaPoints) likely replaces add_cov
         -   All instances of "add_cov" involve adding Gaussians anyway
@@ -35,18 +28,25 @@ ToDo:
         -   mvg1 + mvg2, 
         -   muladd(A, mvg1, mvg2) (uses choladdleft, can be used in linear predictions) 
 
-4.  Build out more complete API 
-    -   "@uncertain" macro and "unscented" function
+3.  Build out more complete API 
+    -   "@uncertain" macro to call out the current "gaussian" function in math.jl
+
+    -   Build out core math functions on "AbstractGaussian" arguments with unscented transformas on "gaussian" function 
+        -   May need to test "epsilon" levels for certain functions with limits (like sqrt, log etc)
 
     -   Revamp precision definitions
         -   Experiment with improved precision measures
-        -   May want to set αmin = 10*sqrt(N*eps(T))
+        -   May want to set epsilon = 10*sqrt(N*eps(T))
+
     -   Joint probability functions
         -   joint(d1, dN::UvGaussian...) (weighted average around mean, sqrt inverse sumsquare for std)
         -   joint(d1, dN::MvGaussian...) (recurseive Kalman update)
+
     -   May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
-5.  Build out documentation
+
+
+4.  Build out documentation
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"
