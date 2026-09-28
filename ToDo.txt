@@ -1,14 +1,8 @@
 ToDo:
-0.  Change "alphamin to epsilon"
-
-1.  Improve mean precision:
-    -   There may be a way to compensate for a lack of precision around sum(X[i].*w[i], i=1:N) + X[0]*(1-sum(wi))
-        -   Maybe X[0] + sum(w[i]*(X[i]-X[0]), 1:N)
-        -   Precision now lies with X[i]-X[0] rather than 1 - sum(w, 1:N)
-    -   First implement this as a separate calculation (which is double the old mean complexity)
-        -   But this will REDUCE complexity when fused with covaraince, which needs these values anyway
-        -   May want to include an option for mean to be set to "nothing" in order to bypass this completely
-            -   An "_update_mean!" function could be defined to handle the different mean argument cases
+1.  Improve mean performance:
+    -   A different version of the sigma point mean was added, which increased computational complexity
+        -   We can reduce computational burden by fusing this mean calculation with the existing std calculation
+            -   Add an "_update_mean!" function could be defined to handle the different mean argument cases
             -   _update_mean!(op, v::Nothing, x::AbstractVector) does nothing 
             -   _update_mean!(op, v::MutableVector, x::AbstractVector) updates in-place
             -   _update_mean!(op, v::StaticVector, x::AbstractVector) returns an added vector the same type as v

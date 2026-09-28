@@ -7,7 +7,7 @@ Post cleanup:
 -   This is a good resource to verify other scaling rules
     https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
 ======================================================================================================================================#
-
+import ArrayInterface.can_setindex
 
 """
 SigmaParams(α=1.0, κ=0.0, ϵ=1e-6)
@@ -172,22 +172,26 @@ Stats functions
 ======================================================================================================================================#
 function mean(X::SigmaPoints{<:AbstractVector})
     w = X.weights
-    μ = w[begin].*X[begin]
+    X0 = X[begin]
+    μ = copy(X0)
     outer_inds = (firstindex(X)+1):lastindex(X)
 
-    if ismutable(μ)
+    if can_setindex(μ)
         for ind in outer_inds
-            μ .+= w[ind].*X[ind]
+            μ .+= w[ind].*(X[ind].-X0)
         end
         return μ
     else
-        return sum(ind-> w[ind].*X[ind], outer_inds, init=μ)
+        return sum(ind-> w[ind].*(X[ind].-X0), outer_inds, init=μ)
     end
 end
 
 function mean(X::SigmaPoints{<:AbstractVector{<:Number}}) 
     w = X.weights
-    return sum(ind-> w[ind]*X[ind], eachindex(X))
+    μ = X[begin]
+    outer_inds = (firstindex(X)+1):lastindex(X)
+
+    return sum(ind-> w[ind].*(X[ind].-μ), outer_inds, init=μ)
 end
 
 
