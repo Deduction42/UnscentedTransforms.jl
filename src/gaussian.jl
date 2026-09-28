@@ -77,23 +77,18 @@ An uncertaint vector that by default, is assumed to follow a Gaussian distributi
 takes the square-root form. Diagonal and triangular matrices are already assumed to be in square root form. Otherwise 
 the constructor performs a cholesky decomposition.
 """
-@kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Factorization}} <: AbstractGaussian
+@kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Cholesky}} <: AbstractGaussian
     μ :: TX
     σ :: TM
-    MvGaussian{TX,TM}(x, m) where {TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Factorization}} = new{TX,TM}(x, m)
-    function MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Factorization)
-        cm = cholesky(m)
+    MvGaussian{TX,TM}(x, m) where {TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Cholesky}} = new{TX,TM}(x, lowerform(m))
+    function MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Union{Diagonal,Cholesky})
+        cm = lowerform(m) #Enforce lower triangular form
         return new{typeof(x), typeof(cm)}(x, m)
     end
-    function MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Diagonal)
-        return new{typeof(x), typeof(m)}(x, m)
-    end
 end
-MvGaussian(x::Union{ZeroVec,AbstractVector}, m::AbstractMatrix) = MvGaussian(x, cholesky(m))
-MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Union{LowerTriangular,UpperTriangular}) = MvGaussian(x, Cholesky(m))
-MvGaussian(m::Union{Diagonal,Factorization}) = MvGaussian(ZeroVec(), m)
-MvGaussian(m::Hermitian) = MvGaussian(ZeroVec(), cholesky(m))
-gaussian(μ::AbstractVector, σ::Union{Factorization, AbstractMatrix}) = MvGaussian(μ, σ)
+MvGaussian(x::Union{ZeroVec,AbstractVector}, m::AbstractMatrix) = MvGaussian(x, lowerform(m))
+MvGaussian(m::Union{Cholesky,AbstractMatrix}) = MvGaussian(ZeroVec(), m)
+gaussian(μ::AbstractVector, σ::Union{Cholesky, AbstractMatrix}) = MvGaussian(μ, σ)
 
 MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(SVector(map(std, args))))
 MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
@@ -125,3 +120,19 @@ Base.view(x::MvGaussian, inds) = MvGaussian(view(x.μ, inds), _stdview(x.σ, ind
 
 _stdview(σ::Cholesky, inds) = Cholesky(UpperTriangular(view(σ.U, inds, inds)))
 _stdview(σ::Diagonal, inds) = Diagonal(view(σ.diag, inds))
+
+#Enforce the lower form of cholesky decomposition
+function lowerform(ch::Cholesky{T,M}) where {T,M}
+    if ch.uplo == 'L'
+        return ch 
+    elseif ch.uplo == 'U'
+        factors = convert(M, ch.factors')
+        return Cholesky(LowerTriangular(factors))
+    end
+    error("Cholesky `uplo` should either be 'U' or 'L'")
+end
+
+lowerform(m::Hermitian) = lowerform(cholesky(m))
+lowerform(m::UpperTriangular{T,M}) where {T,M} = Cholesky(LowerTriangular{T,M}(m.data'))
+lowerform(m::LowerTriangular{T,M}) where {T,M} = Cholesky(m)
+lowerform(m::Diagonal) = m
