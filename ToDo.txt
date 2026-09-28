@@ -1,9 +1,5 @@
 ToDo:
-1.  Make the MvGaussian constructor use the L version of the covariance structure
-    -   L is the only thing used in sigma points, and R version creates copies
-    -   May as well ensure this at the constructor level
-
-2.  Build out "uncented" function and test it over a variety of alpha values
+1.  Build out "uncented" function and test it over a variety of alpha values
     -   May want to rename αmin to ϵ
     -   function unscented(f, θ::SigmaParams, args::AbstractGaussian...) 
             w = scale_weights(f, θ, args...)
@@ -12,7 +8,7 @@ ToDo:
         end
     -   unscanted(f, args::AbstractGaussian...) = unscented(f, SigmaParams(), args...)
 
-3.  Improve mean precision:
+2.  Improve mean precision:
     -   There may be a way to compensate for a lack of precision around sum(X[i].*w[i], i=1:N) + X[0]*(1-sum(wi))
         -   Maybe X[0] + sum(w[i]*(X[i]-X[0]), 1:N)
         -   Precision now lies with X[i]-X[0] rather than 1 - sum(w, 1:N)
@@ -27,15 +23,19 @@ ToDo:
         -   combine(...) will potentially need to create copies of the Gaussian 
         -   avoid copying (-x) because the negation already creates a copy
 
-4.  Code Cleanup:
+3.  Code Cleanup:
     -   add_cov, may be obsolete
         -   New high-precision combine(+, g::AbstractGaussian, X::SigmaPoints) likely replaces add_cov
         -   All instances of "add_cov" involve adding Gaussians anyway
         -   Previous separation was because of performance improvments by calculating mean first
     -   choladdleft (add_lcov), would still be needed, but we can REMOVE choladdright (add_rcov)
         -   I don't think even "choladd" is implemented yet for two cholesky decompositions
+    -   add linear math
+        -   A*mvg, 
+        -   mvg1 + mvg2, 
+        -   muladd(A, mvg1, mvg2) (uses choladdleft, can be used in linear predictions) 
 
-5.  Build out more complete API 
+4.  Build out more complete API 
     -   "@uncertain" macro and "unscented" function
 
     -   Revamp precision definitions
@@ -46,7 +46,7 @@ ToDo:
         -   joint(d1, dN::MvGaussian...) (recurseive Kalman update)
     -   May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
-6.  Build out documentation
+5.  Build out documentation
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"
