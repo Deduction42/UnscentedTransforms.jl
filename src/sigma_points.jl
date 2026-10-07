@@ -7,10 +7,10 @@ Post cleanup:
 -   This is a good resource to verify other scaling rules
     https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
 ======================================================================================================================================#
-
+import ArrayInterface.can_setindex
 
 """
-SigmaParams(α=1.0, κ=0.0, αmin=1e-6)
+SigmaParams(α=1.0, κ=0.0, ϵ=1e-6)
 
 Sigma point parameters for the Unscented Transform. The inner value is κ which denotes a constant offest form the dimension 
 (as defined in the classical single-value parameterization). There is an option to set α instead which is a distance scalar 
@@ -22,18 +22,18 @@ encourages users to do two things:
 1. Clamp values inside the function as a first step (projection)
 2. Define asymptotes/domain boundaries of functions if they exist (used for scaling)
 
-Due to computational precision issues, an optional αmin parameter is provided. A value of 1e-6 is a good balance for Float64 
-it is large enough to enough precision on (1-αmin^2) while being small enough to obey most constraints without clamping/projection. 
-If estimates are unstable, αmin may need to be increased at the cost of relying more on clamping/projection.
+Due to computational precision issues, an optional ϵ parameter is provided. A value of 1e-6 is a good balance for Float64 
+it is large enough to enough precision on (1-ϵ^2) while being small enough to obey most constraints without clamping/projection. 
+If estimates are unstable, ϵ may need to be increased at the cost of relying more on clamping/projection.
 """
 struct SigmaParams
     κ :: Float64
     α :: Float64
-    αmin :: Float64
+    ϵ :: Float64
 end
 
-function SigmaParams(; κ=0.0, α=NaN, αmin=1e-6)
-    return isfinite(α) ? SigmaParams(NaN, α, αmin) : SigmaParams(κ, NaN, αmin) 
+function SigmaParams(; κ=0.0, α=NaN, ϵ=1e-6)
+    return isfinite(α) ? SigmaParams(NaN, α, ϵ) : SigmaParams(κ, NaN, ϵ) 
 end
 
 SigmaParams(κ::Number) = SigmaParams(κ, NaN, 1e-6)
@@ -48,7 +48,7 @@ Base.@kwdef struct SigmaWeights{V<:Union{ConstVec{Float64},AbstractVector{Float6
     N  :: Int
     w0 :: Float64
     wi :: V
-    αmin :: Float64
+    ϵ :: Float64
 end
 
 function SigmaWeights(N::Integer, κ::SigmaParams)
@@ -64,7 +64,7 @@ function SigmaWeights(N::Integer, κ::SigmaParams)
     wi = 0.5/abs2(δ)
     w0 = 1 - 2*N*wi
 
-    return SigmaWeights(N=N, w0=w0, wi=ConstVec(wi), αmin=κ.αmin)
+    return SigmaWeights(N=N, w0=w0, wi=ConstVec(wi), ϵ=κ.ϵ)
 end
 
 SigmaWeights(θ::SigmaWeights) = θ
@@ -172,22 +172,26 @@ Stats functions
 ======================================================================================================================================#
 function mean(X::SigmaPoints{<:AbstractVector})
     w = X.weights
-    μ = w[begin].*X[begin]
+    X0 = X[begin]
+    μ = copy(X0)
     outer_inds = (firstindex(X)+1):lastindex(X)
 
-    if ismutable(μ)
+    if can_setindex(μ)
         for ind in outer_inds
-            μ .+= w[ind].*X[ind]
+            μ .+= w[ind].*(X[ind].-X0)
         end
         return μ
     else
-        return sum(ind-> w[ind].*X[ind], outer_inds, init=μ)
+        return sum(ind-> w[ind].*(X[ind].-X0), outer_inds, init=μ)
     end
 end
 
 function mean(X::SigmaPoints{<:AbstractVector{<:Number}}) 
     w = X.weights
-    return sum(ind-> w[ind]*X[ind], eachindex(X))
+    μ = X[begin]
+    outer_inds = (firstindex(X)+1):lastindex(X)
+
+    return sum(ind-> w[ind].*(X[ind].-μ), outer_inds, init=μ)
 end
 
 
