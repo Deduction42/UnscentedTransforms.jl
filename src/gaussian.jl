@@ -62,6 +62,7 @@ UvGaussian(μ::T1, σ::T2) where {T1,T2} = UvGaussian{promote_type(T1,T2)}(μ, �
 gaussian(μ::Number, σ::Number) = UvGaussian(μ, σ)
 
 Base.length(x::UvGaussian) = 1
+Base.copy(x::UvGaussian) = UvGaussian(copy(mean(x)), copy(std(x)))
 meantype(x::UvGaussian) = typeof(x.μ)
 
 mean(x::UvGaussian) = x.μ
@@ -94,6 +95,7 @@ MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Dia
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(convert(TX, x.μ), convert(TM, x.σ))
 Base.length(x::MvGaussian) = length(x.μ)
+Base.copy(x::MvGaussian) = MvGaussian(copy(mean(x)), copy(std(x)))
 meantype(x::MvGaussian) = typeof(x.μ)
 correlated(x::MvGaussian{<:Any,<:Diagonal}) = MvGaussian(x.μ, diag2chol(x.σ))
 correlated(x::MvGaussian{<:Any,<:Cholesky}) = x

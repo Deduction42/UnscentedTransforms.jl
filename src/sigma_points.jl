@@ -8,6 +8,7 @@ Post cleanup:
     https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
 ======================================================================================================================================#
 import ArrayInterface.can_setindex
+can_setindex(::Type{ZeroVec}) = false
 
 """
 SigmaParams(α=1.0, κ=0.0, ϵ=1e-6)
@@ -157,14 +158,51 @@ function Base.getindex(X::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}, i::Int)
     throw(BoundsError(X, i))
 end
 
+#=
 MvGaussian(X::SigmaPoints) = MvGaussian(mean(X), std(X))
 UvGaussian(X::SigmaPoints) = UvGaussian(mean(X), std(X))
-
+=#
+MvGaussian(X::SigmaPoints) = combine!(+, MvGaussian(ZeroVec(), zero_chol(X)), X)
+UvGaussian(X::SigmaPoints) = combine(+, UvGaussian(0.0, 0.0), X)
 
 #Dispatch patterns for generic function
 gaussian(X::SigmaPoints{<:AbstractVector{<:AbstractVector}}) = MvGaussian(X)
 gaussian(X::SigmaPoints{<:AbstractVector{<:Number}}) = UvGaussian(X)
 gaussian(X::SigmaPoints{<:AbstractGaussian}) = X.source
+
+#======================================================================================================================================
+Combining Gaussians with SigmaPoints
+======================================================================================================================================#
+combine(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints) = combine!(op, copy(g), X)
+
+function combine!(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints)
+    w = X.weights
+    x0 = X[begin]
+    μ = vec_update!(op, mean(g), x0, true)
+    δ = Vector(μ)
+    ch = std(g)
+
+    for i in (firstindex(X)+1):lastindex(X)
+        δ .= X[i] .- x0
+        μ = vec_update!(+, μ, δ, w[i])
+        chol_update!(ch, δ, w[i])
+    end
+    return MvGaussian(μ, ch)
+end
+
+function combine(op::Union{typeof(+), typeof(-)}, g::UvGaussian, X::SigmaPoints)
+    w = X.weights
+    X0 = X[begin]
+    μ  = op(mean(g), X0)
+    σ² = abs2(std(g))
+
+    for i in (firstindex(X)+1):lastindex(X)
+        δ = X[i] - X0
+        μ  += w[i]*δ
+        σ² += w[i]*abs2(δ)
+    end
+    return UvGaussian(μ, sqrt(σ²))
+end
 
 
 #======================================================================================================================================
@@ -368,6 +406,21 @@ function chol_update!(ch::Cholesky, x::Vector, w::Real)
     return w >= 0 ? lowrankupdate!(ch, x) : lowrankdowndate!(ch, x)
 end
 
+function vec_update!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::AbstractVector, w::Real)
+    if can_setindex(μ)
+        μ .+= w.*x
+        return μ
+    end
+    return μ .+ w.*x
+end
+
+vec_update!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*w
+
+function zero_chol(X::SigmaPoints)
+    x0 = X[begin]
+    nd = length(x0)
+    return Cholesky(LowerTriangular(zeros(eltype(x0), nd, nd)))
+end
 
 diag2chol(d::Diagonal) = Cholesky(LowerTriangular(Matrix(d)))
 
