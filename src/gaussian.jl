@@ -74,19 +74,18 @@ meancol(x::UvGaussian) = x.μ
 MvGaussian(x, Σ)
 
 An uncertaint vector that by default, is assumed to follow a Gaussian distribution. The uncertainty in this object
-takes the square-root form. Diagonal and triangular matrices are already assumed to be in square root form. Otherwise 
+takes the lower square-root form. Diagonal and triangular matrices are already assumed to be in square root form. Otherwise 
 the constructor performs a cholesky decomposition.
 """
-@kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Cholesky}} <: AbstractGaussian
+@kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM} <: AbstractGaussian
     μ :: TX
     σ :: TM
-    MvGaussian{TX,TM}(x, m) where {TX<:Union{ZeroVec,AbstractVector}, TM<:Union{Diagonal,Cholesky}} = new{TX,TM}(x, lowerform(m))
-    function MvGaussian(x::Union{ZeroVec,AbstractVector}, m::Union{Diagonal,Cholesky})
-        cm = lowerform(m) #Enforce lower triangular form
-        return new{typeof(x), typeof(cm)}(x, m)
+    MvGaussian{TX,TM}(x, m) where {TX<:Union{ZeroVec,AbstractVector}, TM} = new{TX,TM}(x, lowerform(m))
+    function MvGaussian(x::Union{ZeroVec,AbstractVector}, m)
+        c = lowerform(m) #Enforce lower triangular form
+        return new{typeof(x), typeof(c)}(x, c)
     end
 end
-MvGaussian(x::Union{ZeroVec,AbstractVector}, m::AbstractMatrix) = MvGaussian(x, lowerform(m))
 MvGaussian(m::Union{Cholesky,AbstractMatrix}) = MvGaussian(ZeroVec(), m)
 gaussian(μ::AbstractVector, σ::Union{Cholesky, AbstractMatrix}) = MvGaussian(μ, σ)
 
@@ -133,6 +132,6 @@ function lowerform(ch::Cholesky{T,M}) where {T,M}
 end
 
 lowerform(m::Hermitian) = lowerform(cholesky(m))
-lowerform(m::UpperTriangular{T,M}) where {T,M} = Cholesky(LowerTriangular{T,M}(m.data'))
+lowerform(m::UpperTriangular{T,M}) where {T,M} = Cholesky(LowerTriangular{T,M}(Matrix(m.data')))
 lowerform(m::LowerTriangular{T,M}) where {T,M} = Cholesky(m)
 lowerform(m::Diagonal) = m

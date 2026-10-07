@@ -1,9 +1,4 @@
 ToDo:
-0.  Do not restrict MvGaussian parameters (FlexUnits FactorQuant doesn't subtype to anythying)
-    -   Just use dispatch on inner constructors
-        -   The generic one calls "cholesky"
-        -   Diagonal doesn't do anything 
-        -   LowerTriangular calls "Cholesky", UpperTriangualar calls Cholesky on a copied transpose
 1.  Improve mean performance:
     -   A different version of the sigma point mean was added, which increased computational complexity
         -   We can reduce computational burden by fusing this mean calculation with the existing std calculation
