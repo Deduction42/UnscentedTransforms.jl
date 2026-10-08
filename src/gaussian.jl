@@ -107,7 +107,7 @@ cov(x::MvGaussian{<:Any, <:Cholesky}) = AbstractMatrix(std(x))
 cov(x::MvGaussian{<:Any, <:Diagonal}) = x.σ*x.σ
 
 mean(x::MvGaussian, i::Integer) = x.μ[i]
-std(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = chol_std(x.σ, i)
+std(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = cholstd(x.σ, i)
 std(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = x.σ[i,i]
 
 cholcol(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.σ.L, :, i)
@@ -142,6 +142,7 @@ lowerform(m::LowerTriangular{T,M}) where {T,M} = Cholesky(m)
 lowerform(m::Diagonal) = m
 
 zerochol(::Type{T}, N::Integer) where T = Cholesky(LowerTriangular(zeros(T, N, N)))
+zerochol(v::AbstractVector) = zerochol(eltype(v), length(v))
 densechol(d::Diagonal) = Cholesky(LowerTriangular(Matrix(d)))
 densechol(ch::Cholesky{<:Any, <:Diagonal}) = Cholesky(LowerTriangular(Matrix(ch.L)))
 densechol(ch::Cholesky) = ch

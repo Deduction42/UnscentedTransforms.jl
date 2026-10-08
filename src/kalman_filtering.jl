@@ -172,7 +172,10 @@ Prediction functions (uncertainty propagation)
 =======================================================================================================================#
 
 #Linear predictors with additive noise
-predict(pred::LinearPredictor, x::MvGaussian, u) = muladd(pred.A, x, MvGaussian(pred.B*u, std(pred.ε)))
+function predict(pred::LinearPredictor, x::MvGaussian, u) 
+    Bu₊ε = MvGaussian(pred.B*u, std(pred.ε))
+    return muladd(pred.A, x, Bu₊ε)
+end
 
 #Nonlinar predictors with additive noise (produces an MvGaussian)
 function predict(pred::NonlinearPredictor, x::MvGaussian, u)
@@ -213,7 +216,7 @@ function update(obs::LinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVector,
 
     #This sometimes fails because rounding error on subtraction makes the matrix "negative", skip if that happens
     Σ = try
-        sub_lcov(std(x), K*std(yh).L)
+        cholsubleft(std(x), K*std(yh).L)
     catch err
         @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
         x.σ
@@ -242,7 +245,7 @@ function update(obs::NonlinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVect
     #Update the posterior
     μ = x.μ .+ K*Z.μ
     Σ = try
-        sub_lcov(std(x), K*S.L)
+        cholsubleft(std(x), K*S.L)
     catch err
         @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
         x.σ

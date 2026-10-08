@@ -110,10 +110,10 @@ Base.axes(x::SigmaPoints) = axes(x.weights)
 Base.has_offset_axes(obj::SigmaPoints) = true
 
 halfindex(x::SigmaPoints) = x.weights.N
-dimlength(x::AbstractGaussian) = length(mean(x))
+dimlength(x::MvGaussian) = size(std(x), 1)
 dimlength(x::UvGaussian) = 1
 dimlength(tx::Tuple{Vararg{<:AbstractGaussian}}) = sum(dimlength, tx, init=0)
-dimlength(X::SigmaPoints{<:AbstractGaussian}) = length(X.source)
+dimlength(X::SigmaPoints{<:AbstractGaussian}) = dimlength(X.source)
 dimlength(X::SigmaPoints{<:UvGaussian}) = 1
 dimlength(X::SigmaPoints{<:AbstractVector}) = length(X.source[begin])
 dimlength(x::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}) = length(x.source)
@@ -129,7 +129,6 @@ uv_zero(X::SigmaPoints) = uv_zero(typeof(X[begin]))
 
 #If source is a Gaussian, generate the sigma point
 function Base.getindex(X::SigmaPoints{<:AbstractGaussian}, i::Int)
-    #display(i)
     μ = meancol(X.source)
     i == firstindex(X) && return μ
 
@@ -161,10 +160,6 @@ function Base.getindex(X::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}, i::Int)
     throw(BoundsError(X, i))
 end
 
-#=
-MvGaussian(X::SigmaPoints) = MvGaussian(mean(X), std(X))
-UvGaussian(X::SigmaPoints) = UvGaussian(mean(X), std(X))
-=#
 MvGaussian(X::SigmaPoints) = combine!(+, mv_zero(X), X)
 UvGaussian(X::SigmaPoints) = combine(+, uv_zero(X), X)
 
@@ -181,14 +176,14 @@ combine(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints) = combin
 function combine!(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints)
     w = X.weights
     x0 = X[begin]
-    μ = vec_update!(op, mean(g), x0, true)
+    μ = vecupdate!(op, mean(g), x0, true)
     δ = Vector(μ)
     ch = densechol(std(g))
 
     for i in (firstindex(X)+1):lastindex(X)
         δ .= X[i] .- x0
-        μ = vec_update!(+, μ, δ, w[i])
-        chol_update!(ch, δ, w[i])
+        μ = vecupdate!(+, μ, δ, w[i])
+        cholupdate!(ch, δ, w[i])
     end
     return MvGaussian(μ, ch)
 end
@@ -214,7 +209,7 @@ combine(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussian) = combi
 combine(op::Union{typeof(+), typeof(-)}, g1::UvGaussian, g2::UvGaussian) = UvGaussian(op(mean(g1), mean(g2)), sqrt(cov(g1)+cov(g2)))
 
 function combine!(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussian)
-    μ = vec_update!(op, mean(g1), mean(g2), true)
+    μ = vecupdate!(op, mean(g1), mean(g2), true)
     σ = densechol(std(g1))
     δ = Vector(cholcol(g2, 1))
 
@@ -225,6 +220,123 @@ function combine!(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussia
 
     return MvGaussian(μ, σ)
 end
+
+#======================================================================================================================================
+Helper functions for adding covariances in square root form
+======================================================================================================================================#
+function cov(X::SigmaPoints, Y::SigmaPoints)
+    w = X.weights
+    weight(ii::Integer) = ifelse(ii==1, X.weights.Wσ, X.weights.Wn)
+
+    (nx, ny) = (length(X), length(Y))
+    if nx != ny
+        error("Two sets of sigma points must have the same number of points ($(nx) ≠ $(ny))")
+    end
+
+    (μx, μy) = (X[begin], Y[begin])
+    T = promote_type(Float64, eltype(μx), eltype(μy))
+    S = zeros(T, length(μx), length(μy))
+    inds = (firstindex(X)+1):lastindex(X)
+
+    for i in inds
+        wi = w[i]
+        xi = X[i]
+        yi = Y[i]
+        S .+= wi .* (xi.-μx) .* (yi.-μy)'
+    end
+    return S
+end
+
+
+"""
+choladdleft(ch::Cholesky, L::AbstractMatrix)
+
+Eqivalent of `cholesky(ch.U'ch.U + L*L')`
+"""
+choladdleft(ch::Cholesky, L::AbstractMatrix) = choladdleft!(copy(ch), L)
+choladdleft(d::Diagonal, L::AbstractMatrix) = choladdleft!(densechol(d), L)
+choladdleft(ch::Cholesky{<:Any, <:Diagonal}) = choladdleft!(densechol(ch), L)
+
+function choladdleft!(ch::Cholesky, L::AbstractMatrix)
+    x = zeros(eltype(L), size(L, 1))
+
+    for xi in eachcol(L)
+        x .= xi
+        lowrankupdate!(ch, x)
+    end
+    return ch
+end
+
+"""
+choladdleft(A::AbstractMatrix, B::AbstractMatrix)
+
+Equivalent of cholesky(A*A' + B*B')
+"""
+function choladdleft(A::AbstractMatrix, B::AbstractMatrix)
+    L = lq!([A B]).L
+
+    #Force positive diagonal by flipping row signs
+    for ii in axes(L,1)
+        if L[ii,ii] < 0
+            L[:,ii] .= flipsign.(L[:,ii], -1)
+        end
+    end
+    return Cholesky(LowerTriangular(L))
+end
+
+"""
+sub_lcov(ch::Cholesky, L::AbstractMatrix)
+
+Equivalent of cholesky(ch.U'ch.U - L*L')
+"""
+cholsubleft(ch::Cholesky, L::AbstractMatrix) = cholsubleft!(deepcopy(ch), L)
+
+function cholsubleft!(ch::Cholesky, L::AbstractMatrix)
+    x = zeros(eltype(L), size(L, 1))
+
+    for xi in eachcol(L)
+        x .= xi
+        lowrankdowndate!(ch, x)
+    end
+    return ch
+end
+
+"""
+chol_update!(ch::Cholesky, x::AbstractVector, w::Real)
+
+Updates cholesky decomposition it gives the equivalent of 
+cholesky(ch.U'*ch.U + w*(x'*x))
+This function is non-allocating and the vector "x" is destroyed in the process
+"""
+function cholupdate!(ch::Cholesky, x::Vector, w::Real)
+    x .= sqrt(abs(w)) .* x
+    return w >= 0 ? lowrankupdate!(ch, x) : lowrankdowndate!(ch, x)
+end
+
+function vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::AbstractVector, w::Real)
+    if can_setindex(μ)
+        μ .+= w.*x
+        return μ
+    end
+    return μ .+ w.*x
+end
+
+vecupdate!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*op(w)
+vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::ZeroVec, w::Real) = μ
+vecupdate!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::ZeroVec, w::Real) = ZeroVec()
+
+cholvar(ch::Cholesky) = map(ii->cholvar(ch, ii), axes(ch.U, 2))
+cholstd(ch::Cholesky) = map(ii->cholstd(ch, ii), axes(ch.U, 2))
+
+cholstd(ch::Cholesky, ii::Integer) = sqrt(cholvar(ch, ii))
+function cholvar(ch::Cholesky, ii::Integer)
+    v = view(ch.U, :, ii)
+    return dot(v,v)
+end
+
+
+Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.σ.L)
+
 
 #======================================================================================================================================
 Stats functions
@@ -284,31 +396,6 @@ function cov(x::SigmaPoints)
 end
 =#
 
-#======================================================================================================================================
-Helper functions for adding covariances in square root form
-======================================================================================================================================#
-function cov(X::SigmaPoints, Y::SigmaPoints)
-    w = X.weights
-    weight(ii::Integer) = ifelse(ii==1, X.weights.Wσ, X.weights.Wn)
-
-    (nx, ny) = (length(X), length(Y))
-    if nx != ny
-        error("Two sets of sigma points must have the same number of points ($(nx) ≠ $(ny))")
-    end
-
-    (μx, μy) = (X[begin], Y[begin])
-    T = promote_type(Float64, eltype(μx), eltype(μy))
-    S = zeros(T, length(μx), length(μy))
-    inds = (firstindex(X)+1):lastindex(X)
-
-    for i in inds
-        wi = w[i]
-        xi = X[i]
-        yi = Y[i]
-        S .+= wi .* (xi.-μx) .* (yi.-μy)'
-    end
-    return S
-end
 
 #=
 """
@@ -368,90 +455,3 @@ function add_rcov(A::AbstractMatrix, B::AbstractMatrix)
     return Cholesky(LowerTriangular(R'))
 end
 =#
-
-"""
-add_lcov(ch::Cholesky, L::AbstractMatrix)
-
-Eqivalent of `cholesky(ch.U'ch.U + L*L')`
-"""
-add_lcov(ch::Cholesky, L::AbstractMatrix) = add_lcov!(copy(ch), L)
-
-function add_lcov!(ch::Cholesky, L::AbstractMatrix)
-    x = zeros(eltype(L), size(L, 1))
-
-    for xi in eachcol(L)
-        x .= xi
-        lowrankupdate!(ch, x)
-    end
-    return ch
-end
-
-"""
-add_lcov(A::AbstractMatrix, B::AbstractMatrix)
-
-Equivalent of cholesky(A*A' + B*B')
-"""
-function add_lcov(A::AbstractMatrix, B::AbstractMatrix)
-    L = lq!([A B]).L
-
-    #Force positive diagonal by flipping row signs
-    for ii in axes(L,1)
-        if L[ii,ii] < 0
-            L[:,ii] .= flipsign.(L[:,ii], -1)
-        end
-    end
-    return Cholesky(LowerTriangular(L))
-end
-
-"""
-sub_lcov(ch::Cholesky, L::AbstractMatrix)
-
-Equivalent of cholesky(ch.U'ch.U - L*L')
-"""
-sub_lcov(ch::Cholesky, L::AbstractMatrix) = sub_lcov!(deepcopy(ch), L)
-
-function sub_lcov!(ch::Cholesky, L::AbstractMatrix)
-    x = zeros(eltype(L), size(L, 1))
-
-    for xi in eachcol(L)
-        x .= xi
-        lowrankdowndate!(ch, x)
-    end
-    return ch
-end
-
-"""
-chol_update!(ch::Cholesky, x::AbstractVector, w::Real)
-
-Updates cholesky decomposition it gives the equivalent of 
-cholesky(ch.U'*ch.U + w*(x'*x))
-This function is non-allocating and the vector "x" is destroyed in the process
-"""
-function chol_update!(ch::Cholesky, x::Vector, w::Real)
-    x .= sqrt(abs(w)) .* x
-    return w >= 0 ? lowrankupdate!(ch, x) : lowrankdowndate!(ch, x)
-end
-
-function vec_update!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::AbstractVector, w::Real)
-    if can_setindex(μ)
-        μ .+= w.*x
-        return μ
-    end
-    return μ .+ w.*x
-end
-
-vec_update!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*op(w)
-vec_update!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::ZeroVec, w::Real) = μ
-vec_update!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::ZeroVec, w::Real) = ZeroVec()
-
-chol_var(ch::Cholesky) = map(ii->chol_var(ch, ii), axes(ch.U, 2))
-chol_std(ch::Cholesky) = map(ii->chol_std(ch, ii), axes(ch.U, 2))
-
-chol_std(ch::Cholesky, ii::Integer) = sqrt(chol_var(ch, ii))
-function chol_var(ch::Cholesky, ii::Integer)
-    v = view(ch.U, :, ii)
-    return dot(v,v)
-end
-
-
-Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.σ.L)

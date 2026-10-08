@@ -1,17 +1,5 @@
 ToDo:
-2.  Code Cleanup:
-    -   add_cov, may be obsolete
-        -   New high-precision combine(+, g::AbstractGaussian, X::SigmaPoints) likely replaces add_cov
-        -   All instances of "add_cov" involve adding Gaussians anyway
-        -   Previous separation was because of performance improvments by calculating mean first
-    -   choladdleft (add_lcov), would still be needed, but we can REMOVE choladdright (add_rcov)
-        -   I don't think even "choladd" is implemented yet for two cholesky decompositions
-    -   add linear math
-        -   A*mvg, 
-        -   mvg1 + mvg2, 
-        -   muladd(A, mvg1, mvg2) (uses choladdleft, can be used in linear predictions) 
-
-3.  Build out more complete API 
+1.  Build out more complete API 
     -   "@uncertain" macro to call out the current "gaussian" function in math.jl
 
     -   Build out core math functions on "AbstractGaussian" arguments with unscented transformas on "gaussian" function 
@@ -27,9 +15,9 @@ ToDo:
 
     -   May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
+2.  Build out documentation
 
-
-4.  Build out documentation
+3.  Achieve at least 80% coverage with tests
 
 (future)
 1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"

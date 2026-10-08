@@ -135,13 +135,6 @@ domainlimits(f::Function) = ArgLimits()
 domainlimits(f::Function, t1::Type{<:Any}) = domainlimits(f)
 domainlimits(f::Function, t1::Type{<:Any}, ts::Type{<:Any}...) = domainlimits(f, t1)
 
-#Default domainlimits for some functions
-domainlimits(f::typeof(log), ::Type{<:Number}) = ArgLimits(0.0)
-domainlimits(f::typeof(sqrt), ::Type{<:Number}) = ArgLimits(0.0)
-domainlimits(f::typeof(inv), ::Type{<:Number}) = ArgLimits(0.0)
-domainlimits(f::typeof(asin), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
-domainlimits(f::typeof(acos), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
-
 
 function scale_weights(f, current::Union{SigmaParams, SigmaWeights}, args::AbstractGaussian...) 
     limits = domainlimits(f, map(meantype, args)...)

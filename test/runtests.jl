@@ -7,7 +7,7 @@ using StaticArrays
 using Statistics
 import Random
 
-import UnscentedTransforms.add_lcov
+import UnscentedTransforms.choladdleft
 import UnscentedTransforms.ArgLimits
 
 @testset "Basic Math" begin
@@ -67,8 +67,8 @@ end
     @test cov(Px, Pyh) ≈ cov(Pyh, Px)'
     
     #@test add_rcov(Cx.U*C', Cx.U*C').U ≈ cholesky(hermitianpart!(2*C*Sx*C')).U
-    @test add_lcov(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
-    @test add_lcov(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
+    @test choladdleft(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
+    @test choladdleft(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
     @test std(MvGaussian(Px, Cx)).U ≈ cholesky(Sx).U
 end
 

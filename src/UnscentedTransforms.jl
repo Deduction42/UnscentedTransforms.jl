@@ -1,8 +1,8 @@
 module UnscentedTransforms
     include("gaussian.jl")
     include("sigma_points.jl")
-    include("math.jl")
     include("domainlimits.jl")
+    include("math.jl")
     include("kalman_filtering.jl")
     
     export StateSpaceModel, LinearPredictor, NonlinearPredictor, MvGaussian, UvGaussian, SigmaPoints, SigmaParams, SigmaWeights, ArgLimits
