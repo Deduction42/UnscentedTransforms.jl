@@ -3,6 +3,8 @@ Math functions
 ======================================================================================================================================#
 Base.:+(x::Number, g::UvGaussian) = UvGaussian(x + mean(g), std(g))
 Base.:+(g::UvGaussian, x::Number) = UvGaussian(x + mean(g), std(g))
+Base.:+(x::AbstractVector, g::MvGaussian) = MvGaussian(x + mean(g), std(g))
+Base.:+(g::MvGaussian, x::AbstractVector) = MvGaussian(x + mean(g), std(g))
 
 Base.:+(g1::UvGaussian, g2::UvGaussian) = combine(+, g1, g2)
 Base.:+(g1::MvGaussian, g2::MvGaussian) = combine(+, g1, g2)
@@ -13,7 +15,9 @@ Base.:-(v::ZeroVec) = v
 Base.:-(g::UvGaussian) = UvGaussian(-mean(g), std(g))
 Base.:-(g::MvGaussian) = MvGaussian(-mean(g), std(g))
 Base.:-(x::Number, g::UvGaussian) = UvGaussian(x - mean(g), std(g))
-Base.:-(g::UvGaussian, x::Number) = UvGaussian(x - mean(g), std(g))
+Base.:-(g::UvGaussian, x::Number) = UvGaussian(mean(g) - x, std(g))
+Base.:-(x::AbstractVector, g::MvGaussian) = MvGaussian(x - mean(g), std(g))
+Base.:-(g::UvGaussian, x::AbstractVector) = MvGaussian(mean(g) - x, std(g))
 
 Base.:-(g1::UvGaussian, g2::UvGaussian) = combine(-, g1, g2)
 Base.:-(g1::MvGaussian, g2::MvGaussian) = combine(-, g1, g2)
@@ -27,6 +31,12 @@ Base.:*(x::Number, g::MvGaussian{<:Cholesky}) = MvGaussian(x*mean(g), Cholesky(x
 Base.:*(g::MvGaussian{<:Cholesky}, x::Number) = MvGaussian(x*mean(g), Cholesky(x*std(g).L))
 Base.:*(x::Number, g::MvGaussian{<:Diagonal}) = MvGaussian(x*mean(g), x*std(g))
 Base.:*(g::MvGaussian{<:Diagonal}, x::Number) = MvGaussian(x*mean(g), x*std(g))
+
+function Base.muladd(A::AbstractMatrix, x::MvGaussian, ε::MvGaussian)
+    μ = A*mean(x) + mean(ε)
+    σ = add_lcov(std(ε), A*std(x).L)
+    return MvGaussian(μ, σ)
+end
 
 gaussian(f, θ::SigmaParams, args::UvGaussian...) = gaussian(f, SigmaWeights(length(args), θ), args...)
 

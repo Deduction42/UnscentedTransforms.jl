@@ -215,7 +215,7 @@ combine(op::Union{typeof(+), typeof(-)}, g1::UvGaussian, g2::UvGaussian) = UvGau
 
 function combine!(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussian)
     μ = vec_update!(op, mean(g1), mean(g2), true)
-    σ = std(g1)
+    σ = densechol(std(g1))
     δ = Vector(cholcol(g2, 1))
 
     for i in axes(σ.L, 2)
@@ -310,6 +310,7 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
     return S
 end
 
+#=
 """
 add_cov(σ1, σ2)
 
@@ -347,7 +348,26 @@ function add_cov!(ch1::Cholesky, ch2::Cholesky)
     end
     return ch1
 end
+=#
 
+#=
+"""
+add_rcov(A::AbstractMatrix, B::AbstractMatrix)
+
+Equivalent of `cholesky(A'A + B'B)`
+"""
+function add_rcov(A::AbstractMatrix, B::AbstractMatrix)
+    R = qr!([A;B]).R
+
+    #Force positive diagonal by flipping row signs
+    for ii in axes(R,1)
+        if R[ii,ii] < 0
+            R[ii,:] .= flipsign.(R[ii,:], -1)
+        end
+    end
+    return Cholesky(LowerTriangular(R'))
+end
+=#
 
 """
 add_lcov(ch::Cholesky, L::AbstractMatrix)
@@ -365,24 +385,6 @@ function add_lcov!(ch::Cholesky, L::AbstractMatrix)
     end
     return ch
 end
-
-"""
-add_rcov(A::AbstractMatrix, B::AbstractMatrix)
-
-Equivalent of `cholesky(A'A + B'B)`
-"""
-function add_rcov(A::AbstractMatrix, B::AbstractMatrix)
-    R = qr!([A;B]).R
-
-    #Force positive diagonal by flipping row signs
-    for ii in axes(R,1)
-        if R[ii,ii] < 0
-            R[ii,:] .= flipsign.(R[ii,:], -1)
-        end
-    end
-    return Cholesky(LowerTriangular(R'))
-end
-
 
 """
 add_lcov(A::AbstractMatrix, B::AbstractMatrix)
@@ -438,7 +440,9 @@ function vec_update!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::Abs
     return μ .+ w.*x
 end
 
-vec_update!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*w
+vec_update!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*op(w)
+vec_update!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::ZeroVec, w::Real) = μ
+vec_update!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::ZeroVec, w::Real) = ZeroVec()
 
 chol_var(ch::Cholesky) = map(ii->chol_var(ch, ii), axes(ch.U, 2))
 chol_std(ch::Cholesky) = map(ii->chol_std(ch, ii), axes(ch.U, 2))

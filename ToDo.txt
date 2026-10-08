@@ -1,15 +1,4 @@
 ToDo:
-1.  Improve mean performance:
-    -   A different version of the sigma point mean was added, which increased computational complexity
-        -   We can reduce computational burden by fusing this mean calculation with the existing std calculation
-            -   Add an "_update_mean!" function could be defined to handle the different mean argument cases
-            -   _update_mean!(op, v::Nothing, x::AbstractVector) does nothing 
-            -   _update_mean!(op, v::MutableVector, x::AbstractVector) updates in-place
-            -   _update_mean!(op, v::StaticVector, x::AbstractVector) returns an added vector the same type as v
-    -   May end up being "combine!(op::Union{typeof(+), typeof(-)}, g::AbstractGaussian, points::SigmaPoints)"
-        -   combine(...) will potentially need to create copies of the Gaussian 
-        -   avoid copying (-x) because the negation already creates a copy
-
 2.  Code Cleanup:
     -   add_cov, may be obsolete
         -   New high-precision combine(+, g::AbstractGaussian, X::SigmaPoints) likely replaces add_cov
