@@ -20,6 +20,7 @@ Base.:+(x::AbstractVector, z::ZeroVec) = x
 Base.:-(z::ZeroVec, x::AbstractVector) = -x
 Base.:-(x::AbstractVector, z::ZeroVec) = x 
 Base.view(x::ZeroVec, inds...) = x
+Base.copy(z::ZeroVec) = ZeroVec()
 
 
 """
@@ -62,6 +63,8 @@ UvGaussian(μ::T1, σ::T2) where {T1,T2} = UvGaussian{promote_type(T1,T2)}(μ, �
 gaussian(μ::Number, σ::Number) = UvGaussian(μ, σ)
 
 Base.length(x::UvGaussian) = 1
+Base.copy(x::UvGaussian) = UvGaussian(copy(mean(x)), copy(std(x)))
+uv_zero(::Type{T}) where T = UvGaussian(zero(T), zero(T))
 meantype(x::UvGaussian) = typeof(x.μ)
 
 mean(x::UvGaussian) = x.μ
@@ -77,16 +80,16 @@ An uncertaint vector that by default, is assumed to follow a Gaussian distributi
 takes the lower square-root form. Diagonal and triangular matrices are already assumed to be in square root form. Otherwise 
 the constructor performs a cholesky decomposition.
 """
-@kwdef struct MvGaussian{TX<:Union{ZeroVec,AbstractVector}, TM} <: AbstractGaussian
-    μ :: TX
-    σ :: TM
-    MvGaussian{TX,TM}(x, m) where {TX<:Union{ZeroVec,AbstractVector}, TM} = new{TX,TM}(x, lowerform(m))
+@kwdef struct MvGaussian{Tμ<:Union{ZeroVec,AbstractVector}, Tσ} <: AbstractGaussian
+    μ :: Tμ
+    σ :: Tσ
+    MvGaussian{Tμ,Tσ}(x, m) where {Tμ<:Union{ZeroVec,AbstractVector}, Tσ} = new{Tμ,Tσ}(x, lowerform(m))
     function MvGaussian(x::Union{ZeroVec,AbstractVector}, m)
         c = lowerform(m) #Enforce lower triangular form
         return new{typeof(x), typeof(c)}(x, c)
     end
 end
-MvGaussian(m::Union{Cholesky,AbstractMatrix}) = MvGaussian(ZeroVec(), m)
+MvGaussian(σ::Union{Cholesky,AbstractMatrix}) = MvGaussian(ZeroVec(), σ)
 gaussian(μ::AbstractVector, σ::Union{Cholesky, AbstractMatrix}) = MvGaussian(μ, σ)
 
 MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(SVector(map(std, args))))
@@ -94,9 +97,9 @@ MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Dia
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(convert(TX, x.μ), convert(TM, x.σ))
 Base.length(x::MvGaussian) = length(x.μ)
+Base.copy(x::MvGaussian) = MvGaussian(copy(mean(x)), copy(std(x)))
 meantype(x::MvGaussian) = typeof(x.μ)
-correlated(x::MvGaussian{<:Any,<:Diagonal}) = MvGaussian(x.μ, diag2chol(x.σ))
-correlated(x::MvGaussian{<:Any,<:Cholesky}) = x
+correlated(x::MvGaussian) = MvGaussian(x.μ, densechol(x.σ))
 
 mean(x::MvGaussian) = x.μ
 std(x::MvGaussian) = x.σ 
@@ -116,6 +119,8 @@ meancol(x::MvGaussian) = x.μ
 #Getting an index from a multivariate Gaussian produces a univariate Gaussian
 Base.getindex(x::MvGaussian, i::Integer) = UvGaussian(mean(x, i), std(x, i))
 Base.view(x::MvGaussian, inds) = MvGaussian(view(x.μ, inds), _stdview(x.σ, inds))
+mv_zero(::Type{T}, n) where T = MvGaussian(ZeroVec(), zerochol(T, n))
+mv_zero(::Type{MvGaussian}, n::Integer) = mv_zero(Float64, n)
 
 _stdview(σ::Cholesky, inds) = Cholesky(UpperTriangular(view(σ.U, inds, inds)))
 _stdview(σ::Diagonal, inds) = Diagonal(view(σ.diag, inds))
@@ -135,3 +140,8 @@ lowerform(m::Hermitian) = lowerform(cholesky(m))
 lowerform(m::UpperTriangular{T,M}) where {T,M} = Cholesky(LowerTriangular{T,M}(Matrix(m.data')))
 lowerform(m::LowerTriangular{T,M}) where {T,M} = Cholesky(m)
 lowerform(m::Diagonal) = m
+
+zerochol(::Type{T}, N::Integer) where T = Cholesky(LowerTriangular(zeros(T, N, N)))
+densechol(d::Diagonal) = Cholesky(LowerTriangular(Matrix(d)))
+densechol(ch::Cholesky{<:Any, <:Diagonal}) = Cholesky(LowerTriangular(Matrix(ch.L)))
+densechol(ch::Cholesky) = ch

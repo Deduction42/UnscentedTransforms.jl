@@ -8,6 +8,7 @@ Post cleanup:
     https://www.mathworks.com/help/ident/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html
 ======================================================================================================================================#
 import ArrayInterface.can_setindex
+can_setindex(::Type{ZeroVec}) = false
 
 """
 SigmaParams(α=1.0, κ=0.0, ϵ=1e-6)
@@ -123,6 +124,9 @@ Base.setindex!(X::SigmaPoints{<:AbstractVector}, v, i::Int) = setindex!(X.source
 Base.similar(X::SigmaPoints{<:AbstractGaussian}) = SigmaPoints(X.weights, Vector{eltype(X)}(undef, length(X)))
 Base.similar(X::SigmaPoints, ::Type{S}, dims::Tuple{UnitRange}) where S = SigmaPoints(X.weights, Vector{S}(undef, length(dims[begin])))
 
+mv_zero(X::SigmaPoints) = mv_zero(eltype(X[begin]), dimlength(X))
+uv_zero(X::SigmaPoints) = uv_zero(typeof(X[begin]))
+
 #If source is a Gaussian, generate the sigma point
 function Base.getindex(X::SigmaPoints{<:AbstractGaussian}, i::Int)
     #display(i)
@@ -157,19 +161,75 @@ function Base.getindex(X::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}, i::Int)
     throw(BoundsError(X, i))
 end
 
+#=
 MvGaussian(X::SigmaPoints) = MvGaussian(mean(X), std(X))
 UvGaussian(X::SigmaPoints) = UvGaussian(mean(X), std(X))
-
+=#
+MvGaussian(X::SigmaPoints) = combine!(+, mv_zero(X), X)
+UvGaussian(X::SigmaPoints) = combine(+, uv_zero(X), X)
 
 #Dispatch patterns for generic function
 gaussian(X::SigmaPoints{<:AbstractVector{<:AbstractVector}}) = MvGaussian(X)
 gaussian(X::SigmaPoints{<:AbstractVector{<:Number}}) = UvGaussian(X)
 gaussian(X::SigmaPoints{<:AbstractGaussian}) = X.source
 
+#======================================================================================================================================
+Combining Gaussians with SigmaPoints
+======================================================================================================================================#
+combine(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints) = combine!(op, copy(g), X)
+
+function combine!(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints)
+    w = X.weights
+    x0 = X[begin]
+    μ = vec_update!(op, mean(g), x0, true)
+    δ = Vector(μ)
+    ch = densechol(std(g))
+
+    for i in (firstindex(X)+1):lastindex(X)
+        δ .= X[i] .- x0
+        μ = vec_update!(+, μ, δ, w[i])
+        chol_update!(ch, δ, w[i])
+    end
+    return MvGaussian(μ, ch)
+end
+
+function combine(op::Union{typeof(+), typeof(-)}, g::UvGaussian, X::SigmaPoints)
+    w = X.weights
+    X0 = X[begin]
+    μ  = op(mean(g), X0)
+    σ² = abs2(std(g))
+
+    for i in (firstindex(X)+1):lastindex(X)
+        δ = X[i] - X0
+        μ  += w[i]*δ
+        σ² += w[i]*abs2(δ)
+    end
+    return UvGaussian(μ, sqrt(σ²))
+end
+
+#======================================================================================================================================
+Combining Gaussians with each other
+======================================================================================================================================#
+combine(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussian) = combine!(op, copy(g1), g2)
+combine(op::Union{typeof(+), typeof(-)}, g1::UvGaussian, g2::UvGaussian) = UvGaussian(op(mean(g1), mean(g2)), sqrt(cov(g1)+cov(g2)))
+
+function combine!(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussian)
+    μ = vec_update!(op, mean(g1), mean(g2), true)
+    σ = std(g1)
+    δ = Vector(cholcol(g2, 1))
+
+    for i in axes(σ.L, 2)
+        δ .= cholcol(g2, i)
+        lowrankupdate!(σ, δ)
+    end
+
+    return MvGaussian(μ, σ)
+end
 
 #======================================================================================================================================
 Stats functions
 ======================================================================================================================================#
+#=
 function mean(X::SigmaPoints{<:AbstractVector})
     w = X.weights
     X0 = X[begin]
@@ -197,28 +257,6 @@ end
 
 mean(X::SigmaPoints{<:AbstractGaussian}) = mean(X.source)
 
-function cov(X::SigmaPoints, Y::SigmaPoints)
-    w = X.weights
-    weight(ii::Integer) = ifelse(ii==1, X.weights.Wσ, X.weights.Wn)
-
-    (nx, ny) = (length(X), length(Y))
-    if nx != ny
-        error("Two sets of sigma points must have the same number of points ($(nx) ≠ $(ny))")
-    end
-
-    (μx, μy) = (X[begin], Y[begin])
-    T = promote_type(Float64, eltype(μx), eltype(μy))
-    S = zeros(T, length(μx), length(μy))
-    inds = (firstindex(X)+1):lastindex(X)
-
-    for i in inds
-        wi = w[i]
-        xi = X[i]
-        yi = Y[i]
-        S .+= wi .* (xi.-μx) .* (yi.-μy)'
-    end
-    return S
-end
 
 function std(X::SigmaPoints{<:AbstractVector{<:AbstractVector}}) 
     x0 = X[begin]
@@ -244,10 +282,34 @@ function cov(x::SigmaPoints)
     ch = std(x)
     return AbstractMatrix(ch)
 end
+=#
 
 #======================================================================================================================================
 Helper functions for adding covariances in square root form
 ======================================================================================================================================#
+function cov(X::SigmaPoints, Y::SigmaPoints)
+    w = X.weights
+    weight(ii::Integer) = ifelse(ii==1, X.weights.Wσ, X.weights.Wn)
+
+    (nx, ny) = (length(X), length(Y))
+    if nx != ny
+        error("Two sets of sigma points must have the same number of points ($(nx) ≠ $(ny))")
+    end
+
+    (μx, μy) = (X[begin], Y[begin])
+    T = promote_type(Float64, eltype(μx), eltype(μy))
+    S = zeros(T, length(μx), length(μy))
+    inds = (firstindex(X)+1):lastindex(X)
+
+    for i in inds
+        wi = w[i]
+        xi = X[i]
+        yi = Y[i]
+        S .+= wi .* (xi.-μx) .* (yi.-μy)'
+    end
+    return S
+end
+
 """
 add_cov(σ1, σ2)
 
@@ -256,7 +318,7 @@ Returns the square-root form of adding covariances
 function add_cov end
 
 add_cov(ch::Cholesky, X::SigmaPoints) = add_cov!(copy(ch), X)
-add_cov(d::Diagonal, X::SigmaPoints) = add_cov!(diag2chol(d), X)
+add_cov(d::Diagonal, X::SigmaPoints) = add_cov!(densechol(d), X)
 
 function add_cov!(ch::Cholesky, X::SigmaPoints)
     w = X.weights
@@ -368,8 +430,15 @@ function chol_update!(ch::Cholesky, x::Vector, w::Real)
     return w >= 0 ? lowrankupdate!(ch, x) : lowrankdowndate!(ch, x)
 end
 
+function vec_update!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::AbstractVector, w::Real)
+    if can_setindex(μ)
+        μ .+= w.*x
+        return μ
+    end
+    return μ .+ w.*x
+end
 
-diag2chol(d::Diagonal) = Cholesky(LowerTriangular(Matrix(d)))
+vec_update!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*w
 
 chol_var(ch::Cholesky) = map(ii->chol_var(ch, ii), axes(ch.U, 2))
 chol_std(ch::Cholesky) = map(ii->chol_std(ch, ii), axes(ch.U, 2))

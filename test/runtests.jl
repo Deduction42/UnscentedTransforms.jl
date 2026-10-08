@@ -61,7 +61,7 @@ end
     @test MvGaussian(Pxh).μ ≈ Gx.μ
 
     #Test adding varainces
-    @test cov(Px, Px) ≈ cov(Px)
+    @test cov(Px, Px) ≈ cov(Gx)
     @test cov(Px, Pyh) ≈ cov(Pyh, Px)'
 
     @test add_cov(Cx, Cx).U ≈ cholesky(Sx + Sx).U
