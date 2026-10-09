@@ -206,7 +206,7 @@ function update(obs::LinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVector,
     yh = predict(obs, x, u) #Prediction distribution
     z  = y - yh #Innovation distribution
     Pxy = cov(x)*C' #Obtain cross-covariance of state and measurement innovations
-    K = Pxy/std(yh) #Kalman gain
+    K = Pxy/std(z) #Kalman gain
 
     #Scale the gain based off outliers
     outlier_scaling!(K, z, outlier)
@@ -215,14 +215,14 @@ function update(obs::LinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVector,
     μ = x.μ .+ K*z.μ
 
     #This sometimes fails because rounding error on subtraction makes the matrix "negative", skip if that happens
-    Σ = try
-        cholsubleft(std(x), K*std(yh).L)
+    σ = try
+        cholsubleft(std(x), K*std(z).L)
     catch err
         @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
         x.σ
     end
 
-    return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=yh, K=K)
+    return (X=MvGaussian(Tμ(μ), TΣ(σ)), Y=yh, K=K)
 end
 
 

@@ -71,6 +71,37 @@ function gaussian(f, θ::SigmaParams, x::MvGaussian)
 end
 
 #======================================================================================================================================
+Joint Probabilities
+======================================================================================================================================#
+joint(x::AbstractGaussian) = x
+
+function joint(x1::UvGaussian, x2::UvGaussian)
+    σ² = inv(inv(cov(x1)) + inv(cov(x2)))
+    μ  = σ²*(mean(x1)/cov(x1) + mean(x2)/cov(x2))
+    return UvGaussian(μ, sqrt(σ²))
+end
+
+function joint(x1::MvGaussian, x2::MvGaussian)
+    z = x2 - x1 #Innovation distribution
+    K = cov(x)/std(z) #Kalman gain
+
+    #New mean
+    μ = x1.μ .+ K*z.μ
+
+    #New lower covariance, this sometimes fails because rounding error on subtraction makes the matrix "negative", skip if that happens
+    σ = try
+        cholsubleft(std(x), K*std(z).L)
+    catch err
+        @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
+        x.σ
+    end
+    return MvGaussian(μ, σ)
+end
+
+joint(x1::UvGaussian, x2::UvGaussian, xN::UvGaussian...) = joint(joint(x1, x2), xN...)
+joint(x1::MvGaussian, x2::MvGaussian, xN::MvGaussian...) = joint(joint(x1, x2), xN...)
+
+#======================================================================================================================================
 Nonlinear univariate functions
 ======================================================================================================================================#
 

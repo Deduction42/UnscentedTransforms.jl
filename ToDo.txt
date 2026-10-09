@@ -5,15 +5,6 @@ ToDo:
     -   Build out core math functions on "AbstractGaussian" arguments with unscented transformas on "gaussian" function 
         -   May need to test "epsilon" levels for certain functions with limits (like sqrt, log etc)
 
-    -   Revamp precision definitions
-        -   Experiment with improved precision measures
-        -   May want to set epsilon = 10*sqrt(N*eps(T))
-
-    -   Joint probability functions
-        -   joint(d1, dN::UvGaussian...) (weighted average around mean, sqrt inverse sumsquare for std)
-        -   joint(d1, dN::MvGaussian...) (recurseive Kalman update)
-
-    -   May want to define SquareRootCov{T} as Union{Diagonal{T}, Cholesky{T}} and to define convert(SquareRootCov, m) functions
 
 2.  Build out documentation
 

@@ -156,7 +156,7 @@ end
         (A, B, Q, P) = (obs.A, obs.B, cov(obs.ε), cov(x))
 
         μ = A*x.μ + B*u
-        Σ = hermitianpart!(A*P*A' + Q)
+        Σ = hermitianpart!(A*P*A' + Q, :L)
         return MvGaussian{Tμ,TΣ}(μ, cholesky(Σ))
     end
 
@@ -167,7 +167,7 @@ end
         S  = C*P*C' + R #Innovation covariance 
         K  = (P*C')/S
         μ  = x.μ + K*z
-        Σ  = hermitianpart!((I-K*C)*P)
+        Σ  = hermitianpart!((I-K*C)*P, :L)
         return MvGaussian{Tμ,TΣ}(μ, cholesky(Σ))
     end
 
