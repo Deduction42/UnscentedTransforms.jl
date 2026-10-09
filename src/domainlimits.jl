@@ -63,11 +63,6 @@ function _promote_fieldtypes(::Type{T1}, ::Type{T2}) where {N, T1<:Tuple{Vararg{
 end
 =#
 
-import Base.tail
-Base.first(limits::ArgLimits) = first(limits.list)
-Base.tail(limits::ArgLimits{1}) = first(limits)
-Base.tail(limits::ArgLimits) = tuple2arglims(tail(limits.list))
-
 
 """
 domainlimits(f::Function)
@@ -134,13 +129,6 @@ Examples:
 domainlimits(f::Function) = ArgLimits()
 domainlimits(f::Function, t1::Type{<:Any}) = domainlimits(f)
 domainlimits(f::Function, t1::Type{<:Any}, ts::Type{<:Any}...) = domainlimits(f, t1)
-
-#Default domainlimits for some functions
-domainlimits(f::typeof(log), ::Type{<:Number}) = ArgLimits(0.0)
-domainlimits(f::typeof(sqrt), ::Type{<:Number}) = ArgLimits(0.0)
-domainlimits(f::typeof(inv), ::Type{<:Number}) = ArgLimits(0.0)
-domainlimits(f::typeof(asin), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
-domainlimits(f::typeof(acos), ::Type{<:Number}) = ArgLimits(0.0, 1.0)
 
 
 function scale_weights(f, current::Union{SigmaParams, SigmaWeights}, args::AbstractGaussian...) 

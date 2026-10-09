@@ -172,10 +172,9 @@ Prediction functions (uncertainty propagation)
 =======================================================================================================================#
 
 #Linear predictors with additive noise
-function predict(pred::LinearPredictor, X::MvGaussian, u)
-    xh = pred.A*X.μ + pred.B*u 
-    Σh = add_lcov(std(pred.ε), pred.A*std(X).L)
-    return MvGaussian(xh, Σh)
+function predict(pred::LinearPredictor, x::MvGaussian, u) 
+    Bu₊ε = MvGaussian(pred.B*u, std(pred.ε))
+    return muladd(pred.A, x, Bu₊ε)
 end
 
 #Nonlinar predictors with additive noise (produces an MvGaussian)
@@ -202,29 +201,28 @@ end
 Update functions (Kalman-Update)
 =======================================================================================================================#
 function update(obs::LinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVector, u; outlier=Inf) where {Tμ, TΣ} 
-    (C, D, R, P) = (obs.A, obs.B, std(obs.ε), std(x))
-    yh = C*x.μ .+ D*u
+    C = obs.A #Change in nomenclature for easier reading
 
-    S = add_lcov(R, C*P.L) #Innovation covariance
-    Z = MvGaussian(y.-yh, S) #Innovation distribution
-    Pxy = (P.L*P.U)*C'#Obtain cross-covariance of state and measurement innovations
-    K = (Pxy/S.U)/S.L #Kalman gain
+    yh = predict(obs, x, u) #Prediction distribution
+    z  = y - yh #Innovation distribution
+    Pxy = cov(x)*C' #Obtain cross-covariance of state and measurement innovations
+    K = Pxy/std(z) #Kalman gain
 
     #Scale the gain based off outliers
-    outlier_scaling!(K, Z, outlier)
+    outlier_scaling!(K, z, outlier)
 
     #Update the posterior
-    μ = x.μ .+ K*Z.μ
+    μ = x.μ .+ K*z.μ
 
     #This sometimes fails because rounding error on subtraction makes the matrix "negative", skip if that happens
-    Σ = try
-        sub_lcov(std(x), K*S.L)
+    σ = try
+        cholsubleft(std(x), K*std(z).L)
     catch err
         @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
         x.σ
     end
 
-    return (X=MvGaussian(Tμ(μ), TΣ(Σ)), Y=MvGaussian(yh, S), K=K)
+    return (X=MvGaussian(Tμ(μ), TΣ(σ)), Y=yh, K=K)
 end
 
 
@@ -247,7 +245,7 @@ function update(obs::NonlinearPredictor, x::MvGaussian{Tμ,TΣ}, y::AbstractVect
     #Update the posterior
     μ = x.μ .+ K*Z.μ
     Σ = try
-        sub_lcov(std(x), K*S.L)
+        cholsubleft(std(x), K*S.L)
     catch err
         @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
         x.σ

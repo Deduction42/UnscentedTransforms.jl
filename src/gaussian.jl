@@ -18,7 +18,8 @@ Base.getindex(x::ZeroVec, i::Int) = false
 Base.:+(z::ZeroVec, x::AbstractVector) = x 
 Base.:+(x::AbstractVector, z::ZeroVec) = x
 Base.:-(z::ZeroVec, x::AbstractVector) = -x
-Base.:-(x::AbstractVector, z::ZeroVec) = x 
+Base.:-(x::AbstractVector, z::ZeroVec) = x
+Base.:*(A::AbstractMatrix, z::ZeroVec) = z
 Base.view(x::ZeroVec, inds...) = x
 Base.copy(z::ZeroVec) = ZeroVec()
 
@@ -49,6 +50,8 @@ function gaussian end
 Produces a Gaussian uncertainty object. If μ is a vector and σ is a matrix/factorization, a multivariate distribution is built
 """
 ±(μ, σ) = gaussian(μ, σ)
+±(σ::Union{Cholesky, LowerTriangular, UpperTriangular, Diagonal}) = gaussian(ZeroVec(), σ)
+±(σ::Number) = gaussian(zero(σ), σ)
 
 """
 UvGaussian(x, σ)
@@ -90,7 +93,7 @@ the constructor performs a cholesky decomposition.
     end
 end
 MvGaussian(σ::Union{Cholesky,AbstractMatrix}) = MvGaussian(ZeroVec(), σ)
-gaussian(μ::AbstractVector, σ::Union{Cholesky, AbstractMatrix}) = MvGaussian(μ, σ)
+gaussian(μ::Union{ZeroVec, AbstractVector}, σ::Union{Cholesky, AbstractMatrix}) = MvGaussian(μ, σ)
 
 MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(SVector(map(std, args))))
 MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
@@ -107,7 +110,7 @@ cov(x::MvGaussian{<:Any, <:Cholesky}) = AbstractMatrix(std(x))
 cov(x::MvGaussian{<:Any, <:Diagonal}) = x.σ*x.σ
 
 mean(x::MvGaussian, i::Integer) = x.μ[i]
-std(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = chol_std(x.σ, i)
+std(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = cholstd(x.σ, i)
 std(x::MvGaussian{<:Any, <:Diagonal}, i::Integer) = x.σ[i,i]
 
 cholcol(x::MvGaussian{<:Any, <:Cholesky}, i::Integer) = view(x.σ.L, :, i)
@@ -142,6 +145,7 @@ lowerform(m::LowerTriangular{T,M}) where {T,M} = Cholesky(m)
 lowerform(m::Diagonal) = m
 
 zerochol(::Type{T}, N::Integer) where T = Cholesky(LowerTriangular(zeros(T, N, N)))
+zerochol(v::AbstractVector) = zerochol(eltype(v), length(v))
 densechol(d::Diagonal) = Cholesky(LowerTriangular(Matrix(d)))
 densechol(ch::Cholesky{<:Any, <:Diagonal}) = Cholesky(LowerTriangular(Matrix(ch.L)))
 densechol(ch::Cholesky) = ch

@@ -137,14 +137,14 @@ end
 
 
 """
-add_lcov(ch::Cholesky, L::AbstractMatrix)
+choladdleft(ch::Cholesky, L::AbstractMatrix)
 
 Updates cholesky decomposition ch to be the equivalent of
 cholesky(ch.U'ch.U + L*L')
 """
-add_lcov(ch::Cholesky, L::AbstractMatrix) = add_lcov!(copy(ch), L)
+choladdleft(ch::Cholesky, L::AbstractMatrix) = choladdleft!(copy(ch), L)
 
-function add_lcov!(ch::Cholesky, L::AbstractMatrix)
+function choladdleft!(ch::Cholesky, L::AbstractMatrix)
     x = zeros(eltype(L), size(L, 1))
 
     for xi in eachcol(L)
@@ -174,12 +174,12 @@ end
 
 
 """
-add_lcov(A::AbstractMatrix, B::AbstractMatrix)
+choladdleft(A::AbstractMatrix, B::AbstractMatrix)
 
 Returns the equivalent of
 cholesky(A*A' + B*B')
 """
-function add_lcov(A::AbstractMatrix, B::AbstractMatrix)
+function choladdleft(A::AbstractMatrix, B::AbstractMatrix)
     L = lq!([A B]).L
 
     #Force positive diagonal by flipping row signs
