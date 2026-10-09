@@ -1,3 +1,7 @@
+[![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+[![Coverage Status](https://coveralls.io/repos/github/Deduction42/UnscentedTransforms.jl/badge.svg?branch=main)](https://coveralls.io/github/Deduction42/UnscentedTransforms.jl?branch=main)
+
+
 # UnscentedTransforms
 This is a package designed to function much like [Measurements.jl](https://github.com/juliaphysics/measurements.jl) but instead of using linear error propagation formulas (which are a first order approximation), it uses unscented transforms (which are a second-order approximation). While typically more accurate than error propagation rules, unscented transforms come with the added challenge of dealing with unusual behaviour if the mean is close (with respect to the standard deviation) to an invalid domain limit (such as logs needing to be positive) or an asymptote (such as taking an inverse). This package provides tooling to be able to handle these scenarios.
 
