@@ -315,11 +315,12 @@ end
 
 function vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::AbstractVector, w::Real)
     if can_setindex(μ)
-        μ .+= w.*x
+        μ .+= op(w).*x
         return μ
     end
-    return μ .+ w.*x
+    return μ .+ op(w).*x
 end
+
 
 vecupdate!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*op(w)
 vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::ZeroVec, w::Real) = μ

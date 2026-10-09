@@ -83,17 +83,17 @@ end
 
 function joint(x1::MvGaussian, x2::MvGaussian)
     z = x2 - x1 #Innovation distribution
-    K = cov(x)/std(z) #Kalman gain
+    K = cov(x1)/std(z) #Kalman gain
 
     #New mean
     μ = x1.μ .+ K*z.μ
 
     #New lower covariance, this sometimes fails because rounding error on subtraction makes the matrix "negative", skip if that happens
     σ = try
-        cholsubleft(std(x), K*std(z).L)
+        cholsubleft(std(x1), K*std(z).L)
     catch err
         @warn "Covariance update failed, skipping this step:\n" * sprint(showerror, err)
-        x.σ
+        x1.σ
     end
     return MvGaussian(μ, σ)
 end
@@ -106,14 +106,15 @@ Nonlinear univariate functions
 ======================================================================================================================================#
 
 #Special definitions 
+Base.:≈(x1::AbstractGaussian, x2::AbstractGaussian) = (mean(x1)≈mean(x2)) & (cov(x1)≈cov(x2))
 Base.:*(x1::UvGaussian, x2::UvGaussian) = gaussian(*, SigmaParams(), x1, x2)
 Base.:/(x1::UvGaussian, x2::UvGaussian) = gaussian(*, SigmaParams(), x1, inv(x2))
 domainlimits(f::typeof(inv), ::Type{<:Number}) = ArgLimits(0)
 
 #Periodic asymptotes
-function tan(x::UvGaussian)
-    μ = mean(x) - round(Int64, x/(2π))*2π
-    return _rngtan(UvGaussian(μ, std(x)))
+function Base.tan(x::UvGaussian)
+    μ = mean(x) - round(Int64, mean(x)/(2π))*2π
+    return gaussian(_rngtan, SigmaParams(), UvGaussian(μ, std(x)))
 end
 
 #Generic definitions
@@ -125,13 +126,13 @@ end
 #Functions requiring positive arguments
 for f in (:sqrt, :cbrt, :log, :log2, :log10)
     @eval Base.$f(x::UvGaussian) = gaussian(x->$f(max(x, 0)), SigmaParams(), x)
-    @eval domainlimits(g::typeof($f), ::Type{<:Number}) = ArgLimits(0)
+    @eval domainlimits(g::typeof($f), ::Type{<:Real}) = ArgLimits(0)
 end
 
 #Functions requiring intervals between 0 and 1
 for f in (:asin, :acos,)
     @eval Base.$f(x::UvGaussian) = gaussian(x->$f(clamp(x, 0, 1)), SigmaParams(), x)
-    @eval domainlimits(g::typeof($f), ::Type{<:Number}) = ArgLimits(0, 1)
+    @eval domainlimits(g::typeof($f), ::Type{<:Real}) = ArgLimits(0, 1)
 end
 
 
