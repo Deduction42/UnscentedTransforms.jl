@@ -63,11 +63,6 @@ function _promote_fieldtypes(::Type{T1}, ::Type{T2}) where {N, T1<:Tuple{Vararg{
 end
 =#
 
-import Base.tail
-Base.first(limits::ArgLimits) = first(limits.list)
-Base.tail(limits::ArgLimits{1}) = first(limits)
-Base.tail(limits::ArgLimits) = tuple2arglims(tail(limits.list))
-
 
 """
 domainlimits(f::Function)

@@ -9,7 +9,6 @@ Base.:+(g1::UvGaussian, g2::UvGaussian) = combine(+, g1, g2)
 Base.:-(g::UvGaussian) = UvGaussian(-mean(g), std(g))
 Base.:-(x::Number, g::UvGaussian) = UvGaussian(x - mean(g), std(g))
 Base.:-(g::UvGaussian, x::Number) = UvGaussian(mean(g) - x, std(g))
-Base.:-(g::UvGaussian, x::AbstractVector) = MvGaussian(mean(g) - x, std(g))
 Base.:-(g1::UvGaussian, g2::UvGaussian) = combine(-, g1, g2)
 
 Base.:*(x::Number, g::UvGaussian) = UvGaussian(x*mean(g), x*std(g))
@@ -26,6 +25,7 @@ Base.:+(g::MvGaussian, X::SigmaPoints) = combine(+, g, X)
 
 Base.:-(v::ZeroVec) = v
 Base.:-(g::MvGaussian) = MvGaussian(-mean(g), std(g))
+Base.:-(g::MvGaussian, x::AbstractVector) = MvGaussian(mean(g) - x, std(g))
 Base.:-(x::AbstractVector, g::MvGaussian) = MvGaussian(x - mean(g), std(g))
 Base.:-(g1::MvGaussian, g2::MvGaussian) = combine(-, g1, g2)
 Base.:-(X::SigmaPoints, g::MvGaussian) = combine(-, g, X)
