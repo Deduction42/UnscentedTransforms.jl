@@ -88,7 +88,7 @@ function predictor_func(X, u) # Function needs an input "u" argument even if it'
     return exp(A*Δt)*X # Discretize A and then predict result
 end
 
-#Diagonal matrices for independent model and measurement noidses
+# Diagonal matrices for independent model and measurement noidses
 qd = Diagonal([0.003, 0.00003, 0.1])
 rd = Diagonal([0.2, 0.1])
 
@@ -107,21 +107,30 @@ model = StateSpaceModel(
     outlier  = 2.0 #Penalize observations more than 2 standard deviations from expected value
 )
 
-# Nonlinear predict step of a Kalman filter with u = nothing (unused)
-julia> predict!(model, nothing)
-3-element SizedVector{3, Float64, Vector{Float64}} with indices SOneTo(3):
- -9.020900888258299e-20
- -1.0164395367051604e-19
- -2.3025850929940455
-± 3×3 LowerTriangular{Float64, Matrix{Float64}}:
- 0.00644348   ⋅           ⋅ 
- 0.0052219   0.00274805   ⋅ 
- 0.0         0.0         0.223607
+# Nonlinear predict step of a Kalman filter with u = nothing (unused), returns predicted state
+predict!(model, nothing)
 
 # Linear update step of the Kalman filter with u = []
-#   Produces X for final state, Y as the prediction for the observer (useful for fitting), K for the Kalman gain (useful for troubleshooting)
-julia> update!(model,[0,0], Float64[])
-(X = MvGaussian{SVector{3, Float64}, Cholesky{Float64, Matrix{Float64}}}([-8.977526205148166e-20, -1.0121600199140066e-19, -2.3025850929940455], Cholesky{Float64, Matrix{Float64}}([0.006431392480956524 0.0 0.0; 0.005208169613458738 0.002747017713451009 0.0; 0.0 0.0 0.22360679774997888], 'L', 0)), Y = MvGaussian{SVector{2, Float64}, Cholesky{Float64, Matrix{Float64}}}([-9.020900888258299e-20, -1.0164395367051604e-19], Cholesky{Float64, Matrix{Float64}}([0.2001037691953698 0.0; 0.0001681488012317687 0.10017380777449995], 'L', 0)), K = [0.0010340702311026021 0.003349578289154478; 0.0008373945722886193 0.003467113704056856; 0.0 0.0])
+info = update!(model,[0,0], Float64[])
+
+julia> info.X # Final state after prediction
+3-element SVector{3, Float64} with indices SOneTo(3):
+ -8.977526205148166e-20
+ -1.0121600199140066e-19
+ -2.3025850929940455
+± 3×3 LowerTriangular{Float64, Matrix{Float64}}:
+ 0.00643139   ⋅           ⋅ 
+ 0.00520817  0.00274702   ⋅ 
+ 0.0         0.0         0.223607
+
+ julia> info.Y # Predicted value of Y before the update step (useful for tracking prediction error)
+2-element SVector{2, Float64} with indices SOneTo(2):
+ -9.020900888258299e-20
+ -1.0164395367051604e-19
+± 2×2 LowerTriangular{Float64, Matrix{Float64}}:
+ 0.200104      ⋅ 
+ 0.000168149  0.100174
+
 ```
 
 ## Parameterization
