@@ -1,19 +1,17 @@
-using TestItems: @testitem
-using TestItemRunner
+#============================================================================================================================
+Run these commands at startup to see coverage
+julia --startup-file=no --depwarn=yes --threads=auto -e 'using Coverage; clean_folder("src"); clean_folder("test")'
+julia --startup-file=no --depwarn=yes --threads=auto --project=. -e 'using Pkg; Pkg.test(coverage="user")'
+julia --startup-file=no --depwarn=yes --threads=auto coverage.jl
+============================================================================================================================#
+
 using Revise
+using UnscentedTransforms
+using Test
+using Aqua
 
-@testitem "Basic Functionality" begin
-    include("tests_basic.jl")
+const TESTS = ["tests_basic", "tests_ukf", "tests_aqua"]
+
+for t in TESTS
+    include("$t.jl")
 end
-
-@testitem "Unscented Kalman Filter" begin
-    include("tests_ukf.jl")
-end
-
-@testitem "Aqua.jl" begin
-    using UnscentedTransforms
-    using Aqua
-    Aqua.test_all(UnscentedTransforms)
-end
-
-nothing
