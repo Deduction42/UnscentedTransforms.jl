@@ -3,12 +3,126 @@
 
 
 # UnscentedTransforms
-This is a package designed to function much like [Measurements.jl](https://github.com/juliaphysics/measurements.jl) but instead of using linear error propagation formulas (which are a first order approximation), it uses unscented transforms (which are a second-order approximation). While typically more accurate than error propagation rules, unscented transforms come with the added challenge of dealing with unusual behaviour if the mean is close (with respect to the standard deviation) to an invalid domain limit (such as logs needing to be positive) or an asymptote (such as taking an inverse). This package provides tooling to be able to handle these scenarios.
+This is a package designed to function much like [Measurements.jl](https://github.com/juliaphysics/measurements.jl) but instead of using linear error propagation formulas (which are a first order approximation), it uses unscented transforms (which are a second-order approximation). While typically more accurate than error propagation rules, unscented transforms come with the added challenge of dealing with cases where the sigma points cover an invalid domain limit (such as logs needing to be positive) or an asymptote (such as taking an inverse). This package provides tooling to be able to handle these scenarios.
 
-Propagation error rules assume that inputs are either uncorrelated or identical. UnscentedTransforms.jl however, allows using correlated multivariate inputs, where correlations are defined using a covariance matrix. Due to computational accuracy and the need to avoid recomputing matrix square-roots, the square-root (cholesky) form is used to express the covariance. If a diagonal matrix is used, it is assumed to already be in square-root form (i.e. a diagonal matrix of standard deviations, not variances).
+## Basic Usage
+This package deals with algebra around univariate and multivariate gaussian distributions (`UvGaussian` and `MvGaussian`). These can be constructed using the `gaussian` function or the `±` (\pm) operator to build a gaussian variable with a mean and a standard deviation. When building multivariate objects, the matrix needs to be in lower square-root form (such as a cholesky decomposition, lower triangular, or diagonal matrix of standard deviations).
 
+```julia
+using UnscentedTransforms
+using LinearAlgebra
+
+julia> xuv = 5 ± 0.1
+5.0 ± 0.1
+
+julia> xuv = gaussian(5, 0.1)
+5.0 ± 0.1
+
+julia> xmv = [0, 0.1] ± cholesky([1 0.1; 0.1 0.2])
+2-element Vector{Float64}:
+ 0.0
+ 0.1
+± 2×2 LowerTriangular{Float64, Matrix{Float64}}:
+ 1.0   ⋅ 
+ 0.1  0.43589
+```
+Using lower forms means that the columns represent coefficients of standard normal random numbers that can be added to the mean. It is the most natural analog to expressing error on a vector. It is also computationally coefficient, because sigma points require the lower square root form to construct sigma points. Linear operations do not construct sigma points but instead use linear shortcut rules
+
+```julia 
+julia> xuv*2 + 3
+13.0 ± 0.2
+
+julia> [1 2; 0.1 0.2]*xmv + [0,1]
+2-element Vector{Float64}:
+ 0.2
+ 1.02
+± 2×2 LowerTriangular{Float64, Matrix{Float64}}:
+ 1.48324    ⋅ 
+ 0.148324  0.0
+```
+
+Unfortunately, UnscentedTransforms does not parse out expressions and identify identities naturally like Measurements.jl. For complicated expressions where a variable is used multiple times, you will need to build a higher-level function and apply unscented transforms on it. This is done by calling `gaussian(f::Function, p::SigmaParams, args::UvGaussian...)` as shown below
+```julia
+julia> sin(xuv)/cos(xuv) - tan(xuv) # This assumes all instances of xuv are independent
+0.03834714643546766 ± 2.024728880001174
+
+julia> gaussian(x->sin(x)/cos(x) - tan(x), SigmaParams(), xuv) # This explicitly treats values as identical
+0.0 ± 0.0
+```
+This can also be applied to multivariate functions with partially correlated arguments
+```julia
+julia> gaussian(x->([0.1 0.2; 0.2 -0.1]*x).^2, SigmaParams(), xmv)
+2-element Vector{Float64}:
+ 0.0224
+ 0.0381
+± 2×2 LowerTriangular{Float64, Matrix{Float64}}:
+ 0.023779    ⋅ 
+ 0.0442979  0.0258173
+
+julia> gaussian(x-> x-x, SigmaParams(), xmv) # Values cancel each other out
+2-element Vector{Float64}:
+ 0.0
+ 0.0
+± 2×2 LowerTriangular{Float64, Matrix{Float64}}:
+ 0.0   ⋅ 
+ 0.0  0.0
+ 
+julia> gaussian(x-> x'*x, SigmaParams(), xmv) # Function produces a scalar
+1.21 ± 1.456159331941392 
+```
+
+## Kalman Filtering
 Since the most common use of unscented transforms is the Unscented Kalman Filter (UKF), this package also provides UKF capabilities while being able to use classical linear fallbacks if the transition or observation functions happen to be linear. Robustness is a key objective of this package, so the ability to define boxed state constraints and penalize outlying observations are included features that differentiate this package from many other Kalman filtering packages.
 
+```julia
+using StaticArrays
+const Δt = 1.0
+
+function predictor_func(X, u) # Function needs an input "u" argument even if it's not used
+    k = exp(X[3])
+    A = @SMatrix [
+        0  -k   0;
+        1   0   0;
+        0   0   0 
+    ]
+    return exp(A*Δt)*X # Discretize A and then predict result
+end
+
+#Diagonal matrices for independent model and measurement noidses
+qd = Diagonal([0.003, 0.00003, 0.1])
+rd = Diagonal([0.2, 0.1])
+
+# Build a nonlinear predictor and a linear observer, using ±m (unary operator) will produce a zero-mean noise term
+predictor = NonlinearPredictor(f = predictor_func, ε = ±qd, θ = SigmaParams(ϵ=0.01)) #Nonlinear predictors can use keyword arguments
+observer = LinearPredictor(SA[1 0 0 ; 0 1 0], SMatrix{2,0,Float64}(), ±rd) #Linear predictors are purely positional based on 'A'x + 'B'u
+
+# Initialize the state
+state = SA[0, 0, log(0.1)] ± (2*qd)
+
+# Build the state space model
+model = StateSpaceModel(
+    state = state,
+    predictor = predictor,
+    observer  = observer,
+    outlier  = 2.0 #Penalize observations more than 2 standard deviations from expected value
+)
+
+# Nonlinear predict step of a Kalman filter with u = nothing (unused)
+julia> predict!(model, nothing)
+3-element SizedVector{3, Float64, Vector{Float64}} with indices SOneTo(3):
+ -9.020900888258299e-20
+ -1.0164395367051604e-19
+ -2.3025850929940455
+± 3×3 LowerTriangular{Float64, Matrix{Float64}}:
+ 0.00644348   ⋅           ⋅ 
+ 0.0052219   0.00274805   ⋅ 
+ 0.0         0.0         0.223607
+
+# Linear update step of the Kalman filter with u = []
+#   Produces X for final state, Y as the prediction for the observer (useful for fitting), K for the Kalman gain (useful for troubleshooting)
+julia> update!(model,[0,0], Float64[])
+(X = MvGaussian{SVector{3, Float64}, Cholesky{Float64, Matrix{Float64}}}([-8.977526205148166e-20, -1.0121600199140066e-19, -2.3025850929940455], Cholesky{Float64, Matrix{Float64}}([0.006431392480956524 0.0 0.0; 0.005208169613458738 0.002747017713451009 0.0; 0.0 0.0 0.22360679774997888], 'L', 0)), Y = MvGaussian{SVector{2, Float64}, Cholesky{Float64, Matrix{Float64}}}([-9.020900888258299e-20, -1.0164395367051604e-19], Cholesky{Float64, Matrix{Float64}}([0.2001037691953698 0.0; 0.0001681488012317687 0.10017380777449995], 'L', 0)), K = [0.0010340702311026021 0.003349578289154478; 0.0008373945722886193 0.003467113704056856; 0.0 0.0])
+```
 
 ## Parameterization
 
