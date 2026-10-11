@@ -20,6 +20,8 @@ Base.:+(x::AbstractVector, z::ZeroVec) = x
 Base.:-(z::ZeroVec, x::AbstractVector) = -x
 Base.:-(x::AbstractVector, z::ZeroVec) = x
 Base.:*(A::AbstractMatrix, z::ZeroVec) = z
+Base.:*(n::Number, z::ZeroVec) = z 
+Base.:*(z::ZeroVec, n::Number) = z 
 Base.view(x::ZeroVec, inds...) = x
 Base.copy(z::ZeroVec) = ZeroVec()
 
@@ -99,7 +101,7 @@ MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(
 MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(convert(TX, x.μ), convert(TM, x.σ))
-Base.length(x::MvGaussian) = length(x.μ)
+Base.length(x::MvGaussian) = size(x.σ, 1)
 Base.copy(x::MvGaussian) = MvGaussian(copy(mean(x)), copy(std(x)))
 meantype(x::MvGaussian) = typeof(x.μ)
 correlated(x::MvGaussian) = MvGaussian(x.μ, densechol(x.σ))
@@ -144,8 +146,12 @@ lowerform(m::UpperTriangular{T,M}) where {T,M} = Cholesky(LowerTriangular{T,M}(M
 lowerform(m::LowerTriangular{T,M}) where {T,M} = Cholesky(m)
 lowerform(m::Diagonal) = m
 
+lowerstd(m::Cholesky) = m.L 
+lowerstd(m::Diagonal) = m
+lowerstd(x::MvGaussian) = lowerstd(std(x))
+
 zerochol(::Type{T}, N::Integer) where T = Cholesky(LowerTriangular(zeros(T, N, N)))
-zerochol(v::AbstractVector) = zerochol(eltype(v), length(v))
+zerochol(m::Union{AbstractMatrix, Cholesky}) = zerochol(eltype(m), size(m, 1))
 densechol(d::Diagonal) = Cholesky(LowerTriangular(Matrix(d)))
 densechol(ch::Cholesky{<:Any, <:Diagonal}) = Cholesky(LowerTriangular(Matrix(ch.L)))
 densechol(ch::Cholesky) = ch

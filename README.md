@@ -75,6 +75,8 @@ julia> gaussian(x-> x'*x, SigmaParams(), xmv) # Function produces a scalar
 Since the most common use of unscented transforms is the Unscented Kalman Filter (UKF), this package also provides UKF capabilities while being able to use classical linear fallbacks if the transition or observation functions happen to be linear. Robustness is a key objective of this package, so the ability to define boxed state constraints and penalize outlying observations are included features that differentiate this package from many other Kalman filtering packages.
 
 ```julia
+using UnscentedTransforms
+using LinearAlgebra
 using StaticArrays
 const Δt = 1.0
 
@@ -88,16 +90,16 @@ function predictor_func(X, u) # Function needs an input "u" argument even if it'
     return exp(A*Δt)*X # Discretize A and then predict result
 end
 
-# Diagonal matrices for independent model and measurement noidses
-qd = Diagonal([0.003, 0.00003, 0.1])
-rd = Diagonal([0.2, 0.1])
+# Use the ± (unary operator) to build zero-mean noise terms for the Kalman filter
+εx = ± Diagonal(SA[0.003, 0.00003, 0.1])
+εy = ± Diagonal(SA[0.2, 0.1])
 
 # Build a nonlinear predictor and a linear observer, using ±m (unary operator) will produce a zero-mean noise term
-predictor = NonlinearPredictor(f = predictor_func, ε = ±qd, θ = SigmaParams(ϵ=0.01)) #Nonlinear predictors can use keyword arguments
-observer = LinearPredictor(SA[1 0 0 ; 0 1 0], SMatrix{2,0,Float64}(), ±rd) #Linear predictors are purely positional based on 'A'x + 'B'u
+predictor = NonlinearPredictor(f = predictor_func, ε = εx, θ = SigmaParams(ϵ=0.01)) #Nonlinear predictors can use keyword arguments
+observer = LinearPredictor(SA[1 0 0 ; 0 1 0], SMatrix{2,0,Float64}(), εy) #Linear predictors are purely positional based on 'A'x + 'B'u
 
 # Initialize the state
-state = SA[0, 0, log(0.1)] ± (2*qd)
+state = SA[0, 0, log(0.1)] + (2*εx)
 
 # Build the state space model
 model = StateSpaceModel(

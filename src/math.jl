@@ -31,20 +31,18 @@ Base.:-(g1::MvGaussian, g2::MvGaussian) = combine(-, g1, g2)
 Base.:-(X::SigmaPoints, g::MvGaussian) = combine(-, g, X)
 Base.:-(g::MvGaussian, X::SigmaPoints) = combine(-, g, X)
 
-Base.:*(x::Number, g::MvGaussian{<:Cholesky}) = MvGaussian(x*mean(g), Cholesky(x*std(g).L))
-Base.:*(g::MvGaussian{<:Cholesky}, x::Number) = MvGaussian(x*mean(g), Cholesky(x*std(g).L))
-Base.:*(x::Number, g::MvGaussian{<:Diagonal}) = MvGaussian(x*mean(g), x*std(g))
-Base.:*(g::MvGaussian{<:Diagonal}, x::Number) = MvGaussian(x*mean(g), x*std(g))
+Base.:*(x::Number, g::MvGaussian) = MvGaussian(x*mean(g), x*lowerstd(g))
+Base.:*(g::MvGaussian, x::Number) = MvGaussian(x*mean(g), x*lowerstd(g))
 
 function Base.:*(A::AbstractMatrix, x::MvGaussian)
     μ = A*mean(x)
-    σ = choladdleft!(zerochol(μ), A*std(x).L)
+    σ = choladdleft!(zerochol(x.σ), A*lowerstd(std(x)))
     return MvGaussian(μ, σ)
 end
 
 function Base.muladd(A::AbstractMatrix, x::MvGaussian, ε::MvGaussian)
     μ = A*mean(x) + mean(ε)
-    σ = choladdleft(std(ε), A*std(x).L)
+    σ = choladdleft(std(ε), A*lowerstd(std(x)))
     return MvGaussian(μ, σ)
 end
 
