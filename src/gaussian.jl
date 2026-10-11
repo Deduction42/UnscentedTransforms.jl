@@ -15,6 +15,7 @@ A vector-like object of zeros that does not allocate memory, indexing it always 
 """
 struct ZeroVec end 
 Base.getindex(x::ZeroVec, i::Int) = false
+Base.eltype(::Type{ZeroVec}) = Bool
 Base.:+(z::ZeroVec, x::AbstractVector) = x 
 Base.:+(x::AbstractVector, z::ZeroVec) = x
 Base.:-(z::ZeroVec, x::AbstractVector) = -x
@@ -102,6 +103,7 @@ MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Dia
 
 Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(convert(TX, x.μ), convert(TM, x.σ))
 Base.length(x::MvGaussian) = size(x.σ, 1)
+Base.eltype(::Type{MvGaussian{Tμ,Tσ}}) where {Tμ,Tσ} = UvGaussian{promote_type(eltype(Tμ), eltype(Tσ))}
 Base.copy(x::MvGaussian) = MvGaussian(copy(mean(x)), copy(std(x)))
 meantype(x::MvGaussian) = typeof(x.μ)
 correlated(x::MvGaussian) = MvGaussian(x.μ, densechol(x.σ))
