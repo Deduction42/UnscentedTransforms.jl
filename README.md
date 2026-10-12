@@ -3,7 +3,7 @@
 
 
 # UnscentedTransforms
-This is a package designed to function much like [Measurements.jl](https://github.com/juliaphysics/measurements.jl) but instead of using linear error propagation formulas (which are a first order approximation), it uses unscented transforms (which are a second-order approximation). While typically more accurate than linear error propagation rules, unscented transforms come with the added challenge of dealing with cases where the sigma points cover an invalid domain limit (such as logs needing to be positive) or an asymptote (such as taking an inverse). This package provides tooling to be able to handle these scenarios.
+This is a package designed to function much like [Measurements.jl](https://github.com/juliaphysics/measurements.jl) but instead of using linear error propagation formulas (which are a first order approximation), it uses unscented transforms (which are a second-order approximation). While typically more accurate than linear error propagation rules, unscented transforms come with the added challenge of dealing with cases where the sigma points cover an invalid domain limit (such as logs needing to be positive) or an asymptote (such as taking an inverse). This package provides (currently experimental) tooling to be able to handle these scenarios.
 
 ## Basic Usage
 This package deals with algebra around univariate and multivariate gaussian distributions (`UvGaussian` and `MvGaussian`). These can be constructed using the `gaussian` function or the `±` (\pm) operator to build a gaussian variable with a mean and a standard deviation. When building multivariate objects, the matrix needs to be in lower square-root form (such as a cholesky decomposition, lower triangular, or diagonal matrix of standard deviations); the lower form is the most natural multivariate analog to expressing correlated error terms and is used for constructing sigma points.
@@ -154,10 +154,37 @@ SigmaParams(α=1)
 The default value of `α=1` which maps to a value of `κ=0`. While there are different recommendations on setting these values for varying reasons, we recommend these default values `α=1.0` or `κ=0.0` due to the following reasons: 
 1. *Representation:* Setting `α=1` or `κ=0` defines an ellipse that covers a reasonable proportion of the data (68.27% of the data for a 1-dimensional Gaussian, approaching 50% for higher-dimensional Gaussians). Most of the data in this distribution is going to be this far from the mean.
 2. *Moment Capture:* The original paper recommends setting `κ=3-n` where `n` is the dimension in order to capture higher-order moments. However, this package (and the Unscented Kalman Filter) converts teh resulting sigma points to a Gaussian distribution, which discards higher-order moments.
-3. *Domain Enforcement:* Papers using the three-parameter method often recommend setting `α` to a small number `0.0001 < α < 1` in order to avoid capturing "excess nonlinearity" which can happen when sigma points cross a limit or an asymptote. However, setting `α` to a value much smaller than 1 can cause roundoff errors and will make the UKF behave more like an EKF. This package allows users to set domain limits on sigma points to reduce scaling if the mean is near a box-constrained limit (for example, forcing certain states to be positive or to prevent crossing asymptotes) eliminating the need to set `α < 1`.
+3. *Mitigating the "bounce" effect:* Setting `α` so a very small value (such as `α<0.01`) can cause any clamping behaviour in your internal function to *bounce* the mean away from your limit, causing instability in the estimates. The smaller the `α` value, the rarer bouncing will be, but at the cost of more severe effects.
+4. *Domain Enforcement:* Papers using the three-parameter method often recommend setting `α` to a small number `0.0001 < α < 1` in order to avoid capturing "excess nonlinearity" which can happen when sigma points cross a limit or an asymptote. However, setting `α` to a value much smaller than 1 can cause roundoff errors and will make the UKF behave more like an EKF. This package allows users to set domain limits on sigma points (experimental feature) to reduce scaling if the mean is near a box-constrained limit (for example, forcing certain states to be positive or to prevent crossing asymptotes) eliminating the need to set `α < 1`.
 
 ### Minimum Sigma Point Spread
 As mentioned elsewhere, this package contains tooling to reduce the spread of sigma points if the mean is close to a box-constrained limit. I such cases, it's useful to define a minimum spread ϵ (\epsilon) which functions as a minimum α value for a given state index. This value is needed to ensure we don't run into precision errors. It is typically set to 1e-6 which works well for univariate cases but may need to be set to a larger number (such as ϵ=0.01) when dealing with higher dimensional multivariate states.
 ```julia
 SigmaParams(α=1, ϵ=1e-6)
 ```
+
+### Constraining Sigma Points
+Unscented transforms have the advantage over linear error propagation by being a second-order approximation of the Gaussian instead of a first-order approximation; they also do not require differentiating over the expression. However, one major drawback to unscented transforms is that the sigma points could potentially end up in an infeasible region of the function. This problem can be addressed in two steps:
+
+1. Clamping sigma points to be inside the feasible region at the beginning of the function. This is a simple solution, but if you expect the mean value to approach a limit, the unscented transform variance will "*bounce*" your mean away from the limit. For example, if your original positive parameter had a distribution of `0.001 ± 1.0`, it will likely be close to `0.5005 ± 0.7071071` after clamping.
+2. Constraining sigma points by extending `domainlimits` to your function (an experimental feature with an example shown later). This will *attempt* to reign in the sigma points and adjust the weights so that they don't hit the domain limits of your function. Because the gap needs to be large enough to calculate a reliable difference, there is a limit to how much this algorithm can scale down the points. So clamping arguments is still required as a fallback to ensure all arguments are inside the feasible region.
+
+Constraining sigma points can be done by extending the `domainlimits` function. Here is an example of how to do this for a single-argument function:
+```julia
+# Define a clamped version of the function
+mysqrt(x::Real) = sqrt(max(0,x))
+
+# Observe the bounce effect that drives the mean above the projected result 0.03162
+julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.001 ± 1.0)
+0.5002499375312305 ± 0.6854643797899985
+
+# Define a "domainlimits" function for it (experimental)
+UnscentedTransforms.domainlimits(g::typeof(mysqrt), ::Type{<:Real}) = ArgLimits(0)
+
+# Mean is no longer bounced away, but follows the projected curve capturing negative-skewedness below 0.03162
+julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.001 ± 1.0)
+-8920.390209253877 ± 23.752410689741907
+```
+Note that the mean is in an infeasible region, **so the mean results of an unscented transform may still need to be clamped**; this would result in a value of `0 ± 23.752410689741907`. Note that the linear propagation method would have resulted in a value of around `0.03162 ± 15.8114` which has a much smaller variance.
+
+

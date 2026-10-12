@@ -1,39 +1,43 @@
 ToDo:
-1.  Build out more complete API 
-    -   "@uncertain" macro to call out the current "gaussian" function in math.jl
+1.  Fix an example where the gap appears to go below ϵ
+    ```julia
+    # Define a clamped version of the function
+    mysqrt(x::Real) = sqrt(max(0,x))
 
-    -   Build out core math functions on "AbstractGaussian" arguments with unscented transformas on "gaussian" function 
-        -   May need to test "epsilon" levels for certain functions with limits (like sqrt, log etc)
+    # This produces an unexpected result
+    julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.0 ± 1.0)
+    NaN ± NaN
+    ```
+    
+2.  Fix and test multiple argument domainlimits. This example is broken
 
+    Here is another example of constraining sigma points for a two-argument function
+    ```julia
+    # Define a clamped version of the function
+    mydiv(x::Real, y::Real) = x/max(y, 1e-14)
 
-2.  Build out documentation
+    # Observe the bounce effect
+    gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
 
-3.  Achieve at least 80% coverage with tests
+    # Define a "domainlimits" function for it, note that the first argument has no limits
+    UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = ArgLimits(NaN,0)
+
+    # This now works
+    gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
+    ```
+
+3.  Add a "rangelimits" function that clamps sigma point outputs for the mean
+    -   Applied using 
+        -   gaussian(f, X::SigmaPoints) = gaussian(rangelimits(f), X::SigmaPoints)
+        -   gaussian(lims::ArgLimits, X::SimgaPoints)
+    -   The function gaussian(lims::ArgLimits, X::SimgaPoints) should do the following:
+        -   Use the projected mean as a starting point 
+        -   Use the variance around the projected mean to determine the soft limits
+        -   Apply the soft limits to the final mean result of the SigmaPoints
+
 
 (future)
-1.  Instead of being "yet another Kalman filter", this should be an unscented version of "Measurements.jl"
-    -   "A second-order approximation of uncertainty without dependencies on derivatives"
-    -   Kalman filtering functions shouldn't even be automatically exported
-    -   "UvGaussian" should be the old "Measurement" object
-        -   "UvGaussian{T<:Real}" shoudl be an "AbstractGaussVar"
-        -   "MvGaussian{V<:AbstractVector, M<:Cholesky}" should be an "AbstractGaussVec"
-        -   Both are the unexported "AbstractGaussian"
-    -   Otherwise keep main points of the Measurements.jl API
-        -   Use the "±" notation to construct and display UvGaussian
-            -   Can also be used to construct MvGaussian
-        -   Use Statistics functions (mean, std, cov) instead of "value" and "uncertainty"
-            -   std and var on MvGaussian produces a vector (maintain the same type as mean)
-        -   Support a modified version of the @uncertain macro
-            -   Unscented transform must be the first argument
-        -   We may need underscore methods to reduce confusion with Statistics 
-            -   For example _std(x::Float64) should be zero (in Statistics, it's NaN)
-    -   Interop between UvGaussian and MvGaussian
-        -   MvGaussian on a vector of UvGaussian produces an MvGaussian with a diagonal Cholesky
-        -   scalar indexing MvGaussian produces UvGaussian
-        -   vector indexing MvGaussian produces a downsampled MvGaussian
-    -   FlexUnits extension
-
-2.  Create a new repository called TagMeasurements.jl
+1.  Create a new unregistered repository called TagMeasurements.jl
     -   This requires FlexUnits, TimeRecords, UnscentedTransforms as dependencies
 
     -   Main object "TagMeas{T,D}" and should have the following fields:
