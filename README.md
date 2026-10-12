@@ -140,7 +140,7 @@ julia> info.X # Final state after prediction
 
 ```
 
-## Parameterization
+## Sigma Point Parameterization and Scaling
 
 ### Sigma Point Spread
 This package uses the single-value parameterization approach from the original paper focused on the `κ` (\kappa) value. This can be set as follows:
@@ -169,6 +169,7 @@ Unscented transforms have the advantage over linear error propagation by being a
 1. Clamping sigma points to be inside the feasible region at the beginning of the function. This is a simple solution, but if you expect the mean value to approach a limit, the unscented transform variance will "*bounce*" your mean away from the limit. For example, if your original positive parameter had a distribution of `0.001 ± 1.0`, it will likely be close to `0.5005 ± 0.7071071` after clamping.
 2. Constraining sigma points by extending `domainlimits` to your function (an experimental feature with an example shown later). This will *attempt* to reign in the sigma points and adjust the weights so that they don't hit the domain limits of your function. Because the gap needs to be large enough to calculate a reliable difference, there is a limit to how much this algorithm can scale down the points. So clamping arguments is still required as a fallback to ensure all arguments are inside the feasible region.
 
+#### Single-Argument Constraints
 Constraining sigma points can be done by extending the `domainlimits` function. Here is an example of how to do this for a single-argument function:
 ```julia
 # Define a clamped version of the function
@@ -186,5 +187,48 @@ julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.001 ± 1.0)
 -8920.390209253877 ± 23.752410689741907
 ```
 Note that the mean is in an infeasible region, **so the mean results of an unscented transform may still need to be clamped**; this would result in a value of `0 ± 23.752410689741907`. Note that the linear propagation method would have resulted in a value of around `0.03162 ± 15.8114` which has a much smaller variance.
+
+#### Multiple-Argument Constraints
+The following is an example of defining constraints for multiple arguments
+```julia
+# Define a clamped version of the function
+mydiv(x::Real, y::Real) = x/max(y, 1e-14)
+
+# Observe a massive bounce effect
+julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
+2.500000000005017e13 ± 4.999999999994999e13
+
+# Define a "domainlimits" function for it, for multiple arguments, use a Tuple with an ArgLimits for each argument
+UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = (ArgLimits(NaN), ArgLimits(1e-14))
+
+# Much smaller "bounce", but captures nonlinear effects
+julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
+1.0125072034739445e8 ± 1.4283600988937286e6
+```
+
+#### Multivariate Constraints
+The following is an example on defining constraints on a vector (multivariate) argument
+```julia
+using StaticArrays 
+
+# Define a clamped version of the function
+my1div23(x::SVector{3}) = x[1]/(max(x[2], 1e-14)*max(x[3], 1e-14))
+
+# Original result with clamping
+julia> gaussian(my1div23, SigmaParams(), SA[0.001,0.001,0.001] ± Diagonal(SA[1,1,1]))
+3.3333333333666863e13 ± 5.773502691838524e13
+
+# Define the domain limits as a single vector
+UnscentedTransforms.domainlimits(f::typeof(my1div23), ::Type{<:SVector{3}}) = ArgLimits(SVector(NaN, 1e-3, 1e-3))
+
+# Nonlinearity is captured
+gaussian(my1div23, SigmaParams(), SA[0.001,0.001,0.001] ± Diagonal(SA[1,1,1]))
+3.3333333332788683e19 ± 5.773502691838523e16
+```
+
+
+
+
+
 
 

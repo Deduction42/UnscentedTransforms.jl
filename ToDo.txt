@@ -8,22 +8,22 @@ ToDo:
     julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.0 ± 1.0)
     NaN ± NaN
     ```
-    
-2.  Fix and test multiple argument domainlimits. This example is broken
 
-    Here is another example of constraining sigma points for a two-argument function
+2.  Investigate sigma point clamping for this example that seems a little odd (other examples could be affected)
     ```julia
     # Define a clamped version of the function
     mydiv(x::Real, y::Real) = x/max(y, 1e-14)
 
-    # Observe the bounce effect
-    gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
+    # Observe a massive bounce effect
+    julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
+    2.500000000005017e13 ± 4.999999999994999e13
 
-    # Define a "domainlimits" function for it, note that the first argument has no limits
-    UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = ArgLimits(NaN,0)
+    # Define a "domainlimits" function for it, for multiple arguments, use a Tuple with an ArgLimits for each argument
+    UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = (ArgLimits(NaN), ArgLimits(1e-14))
 
-    # This now works
-    gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
+    # Much smaller "bounce" but relative uncertainty is TOO SMALL (Investigate this)
+    julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
+    1.0125072034739445e8 ± 1.4283600988937286e6
     ```
 
 3.  Add a "rangelimits" function that clamps sigma point outputs for the mean
@@ -35,6 +35,7 @@ ToDo:
         -   Use the variance around the projected mean to determine the soft limits
         -   Apply the soft limits to the final mean result of the SigmaPoints
 
+4.  Consider adding a "shift_mean = true" to toggle the option of just using the projected mean (like the EKF)
 
 (future)
 1.  Create a new unregistered repository called TagMeasurements.jl
