@@ -176,7 +176,7 @@ Constraining sigma points can be done by extending the `domainlimits` function. 
 mysqrt(x::Real) = sqrt(max(0,x))
 
 # Observe the bounce effect that drives the mean above the projected result 0.03162
-julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.001 ± 1.0)
+julia> gaussian(mysqrt, SigmaParams(), 0.001 ± 1.0)
 0.5002499375312305 ± 0.6854643797899985
 
 # Define a "domainlimits" function for it (experimental)
