@@ -3,10 +3,10 @@
 
 
 # UnscentedTransforms
-This is a package designed to function much like [Measurements.jl](https://github.com/juliaphysics/measurements.jl) but instead of using linear error propagation formulas (which are a first order approximation), it uses unscented transforms (which are a second-order approximation). While typically more accurate than error propagation rules, unscented transforms come with the added challenge of dealing with cases where the sigma points cover an invalid domain limit (such as logs needing to be positive) or an asymptote (such as taking an inverse). This package provides tooling to be able to handle these scenarios.
+This is a package designed to function much like [Measurements.jl](https://github.com/juliaphysics/measurements.jl) but instead of using linear error propagation formulas (which are a first order approximation), it uses unscented transforms (which are a second-order approximation). While typically more accurate than linear error propagation rules, unscented transforms come with the added challenge of dealing with cases where the sigma points cover an invalid domain limit (such as logs needing to be positive) or an asymptote (such as taking an inverse). This package provides tooling to be able to handle these scenarios.
 
 ## Basic Usage
-This package deals with algebra around univariate and multivariate gaussian distributions (`UvGaussian` and `MvGaussian`). These can be constructed using the `gaussian` function or the `±` (\pm) operator to build a gaussian variable with a mean and a standard deviation. When building multivariate objects, the matrix needs to be in lower square-root form (such as a cholesky decomposition, lower triangular, or diagonal matrix of standard deviations).
+This package deals with algebra around univariate and multivariate gaussian distributions (`UvGaussian` and `MvGaussian`). These can be constructed using the `gaussian` function or the `±` (\pm) operator to build a gaussian variable with a mean and a standard deviation. When building multivariate objects, the matrix needs to be in lower square-root form (such as a cholesky decomposition, lower triangular, or diagonal matrix of standard deviations); the lower form is the most natural multivariate analog to expressing correlated error terms and is used for constructing sigma points.
 
 ```julia
 using UnscentedTransforms
@@ -26,7 +26,7 @@ julia> xmv = [0, 0.1] ± cholesky([1 0.1; 0.1 0.2])
  1.0   ⋅ 
  0.1  0.43589
 ```
-Using lower forms means that the columns represent coefficients of standard normal random numbers that can be added to the mean. It is the most natural analog to expressing error on a vector. It is also computationally coefficient, because sigma points require the lower square root form to construct sigma points. Linear operations do not construct sigma points but instead use linear shortcut rules
+Linear operations do not construct sigma points but instead use linear shortcut rules.
 
 ```julia 
 julia> xuv*2 + 3
@@ -41,16 +41,19 @@ julia> [1 2; 0.1 0.2]*xmv + [0,1]
  0.148324  0.0
 ```
 
-Unfortunately, UnscentedTransforms does not parse out expressions and identify identities naturally like Measurements.jl. For complicated expressions where a variable is used multiple times, you will need to build a higher-level function and apply unscented transforms on it. This is done by calling `gaussian(f::Function, p::SigmaParams, args::UvGaussian...)` as shown below
+Unfortunately, UnscentedTransforms does not parse out expressions and identify identities naturally like Measurements.jl. For complicated expressions where a variable is used multiple times, you will need to build a higher-level function and apply unscented transforms on it. Reserving unscented transforms for high-level functions is also computationally more efficient as it reduces the number of conversions between sigma points and Gaussian distributions. This is done by calling `gaussian(f::Function, p::SigmaParams, args::UvGaussian...)` as shown below
 ```julia
-julia> sin(xuv)/cos(xuv) - tan(xuv) # This assumes all instances of xuv are independent
+# This assumes all instances of xuv are independent, and reconstructs Gaussians three times
+julia> sin(xuv)/cos(xuv) - tan(xuv) 
 0.03834714643546766 ± 2.024728880001174
 
-julia> gaussian(x->sin(x)/cos(x) - tan(x), SigmaParams(), xuv) # This explicitly treats values as identical
+# This explicitly treats values as identical and reconstructs the Gaussian only once
+julia> gaussian(x->sin(x)/cos(x) - tan(x), SigmaParams(), xuv) 
 0.0 ± 0.0
 ```
 This can also be applied to multivariate functions with partially correlated arguments
 ```julia
+# Generic nonlinear function
 julia> gaussian(x->([0.1 0.2; 0.2 -0.1]*x).^2, SigmaParams(), xmv)
 2-element Vector{Float64}:
  0.0224
@@ -59,7 +62,8 @@ julia> gaussian(x->([0.1 0.2; 0.2 -0.1]*x).^2, SigmaParams(), xmv)
  0.023779    ⋅ 
  0.0442979  0.0258173
 
-julia> gaussian(x-> x-x, SigmaParams(), xmv) # Values cancel each other out
+# A function that should always produce zero
+julia> gaussian(x-> x-x, SigmaParams(), xmv) other out
 2-element Vector{Float64}:
  0.0
  0.0
@@ -67,7 +71,8 @@ julia> gaussian(x-> x-x, SigmaParams(), xmv) # Values cancel each other out
  0.0   ⋅ 
  0.0  0.0
  
-julia> gaussian(x-> x'*x, SigmaParams(), xmv) # Function produces a scalar
+# A multivariate function that produces a scalar
+julia> gaussian(x-> x'*x, SigmaParams(), xmv) 
 1.21 ± 1.456159331941392 
 ```
 
