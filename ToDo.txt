@@ -5,18 +5,7 @@ ToDo:
     -   Re-evaluate current examples to ensure consistency
     -   Give examples on how "bouncing" can occur 
     -   Explain why "proj=true" is the default setting 
-    -   Explain why you want "proj=false, ϵ=0.1, α=1" when Kalman filtering
+    -   Explain why you want "proj=false, α=1, ϵ=0.3" when Kalman filtering
 
-(future)
-1.  Create a new unregistered repository called TagMeasurements.jl
-    -   This requires FlexUnits, TimeRecords, UnscentedTransforms as dependencies
 
-    -   Main object "TagMeas{T,D}" and should have the following fields:
-        -   name::String, value::RefValue{T}, stdev::RefValue{T}, reltol::T, abstol::T, units::Units{D, AffineTransform{Float64}},
-                bounds::SVector{2,T}, aggregation::Symbol, history::TimeSeries{T}, indhint::RefValue{Int}
-        -   include "abstol" and "reltol" fields that can be "nan"
-        -   "stdev" should be nanmax(m.abstol + m.reltol*m.value[])
-
-    -   Define the API for AbstractMeas and set "TagMeas" as one of the objects in this hierarchy 
-        -   readhistory!, rawvalue, rawstdev, rawgauss, sivalue, sistdev, sigauss, quantvalue, quantstdev, quantgauss
 

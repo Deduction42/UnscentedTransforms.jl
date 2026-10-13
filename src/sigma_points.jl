@@ -182,7 +182,7 @@ function combine!(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints
     ch = densechol(std(g))
 
     for i in (firstindex(X)+1):lastindex(X)
-        δ .= X[i] .- μ
+        δ .= X[i] .- X[begin]
         cholupdate!(ch, δ, w[i])
     end
     return MvGaussian(μ, ch)
@@ -194,7 +194,7 @@ function combine(op::Union{typeof(+), typeof(-)}, g::UvGaussian, X::SigmaPoints)
     σ² = abs2(std(g))
 
     for i in (firstindex(X)+1):lastindex(X)
-        δ = X[i] - μ
+        δ = X[i] - X[begin]
         σ² += w[i]*abs2(δ)
     end
     return UvGaussian(μ, sqrt(σ²))
