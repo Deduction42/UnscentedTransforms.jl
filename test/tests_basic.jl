@@ -128,6 +128,12 @@ end
         @test cov(Px, Pyh) ≈ cov(Pyh, Px)'
         @test std(MvGaussian(Px, Cx)).U ≈ cholesky(Sx).U
     end
+
+    #Test consistency between α and ϵ
+    mysqrt(x::Real) = sqrt(max(0,x))
+    UnscentedTransforms.domainlimits(f::typeof(mysqrt), ::Type{<:Real}) = ArgLimits(0)
+    @test gaussian(possqrt, SigmaParams(α=0.01, proj=false), 0.01 ± 0.00) ≈ gaussian(mysqrt, SigmaParams(ϵ=0.01, proj=false), 0.01 ± 0.00)
+    
 end
 
 @testset "Bouncing and Shrinkage" begin

@@ -1,36 +1,8 @@
 ToDo:
 0.  Fix the Tuple{Vararg{<:T}} issue (use Tuple{Vararg{T}} instead)
 
-1.  Investigate odd behaviours in the examples below:
-    -   Make sure linear versions work with small values of α
-    -   This should also be done in a new "scaled_points_experiments" branch
-    
-    ```julia
-    # Define a clamped version of the function
-    mysqrt(x::Real) = sqrt(max(0,x))
-
-    # This produces an unexpected result (because NaN should only happen if ϵ=0)
-    julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.0 ± 1.0)
-    NaN ± NaN
-    ```
-    
-    ```julia
-    # Define a clamped version of the function
-    mydiv(x::Real, y::Real) = x/max(y, 1e-14)
-
-    # Observe a massive bounce effect
-    julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
-    2.500000000005017e13 ± 4.999999999994999e13
-
-    # Define a "domainlimits" function for it, for multiple arguments, use a Tuple with an ArgLimits for each argument
-    UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = (ArgLimits(NaN), ArgLimits(1e-14))
-
-    # Much smaller "bounce" but relative uncertainty is TOO SMALL (Investigate this)
-    julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
-    1.0125072034739445e8 ± 1.4283600988937286e6
-    ```
-
-2.  Add documentation about "projections" and "bouncing" 
+1.  Add documentation about "projections" and "bouncing" 
+    -   Re-evaluate current examples to ensure consistency
     -   Give examples on how "bouncing" can occur 
     -   Explain why "proj=true" is the default setting 
     -   Explain why you want "proj=false, ϵ=0.1, α=1" when Kalman filtering
