@@ -315,7 +315,7 @@ end
 function mean(X::SigmaPoints{<:AbstractVector{<:AbstractVector}})
     # Return projected mean if option is used (simpler and more numerically stable)
     if X.weights.proj 
-        return X[0]
+        return copy(X[0]) #Copy to ensure independence
     end
 
     # Use differntial form to calculate weighted mean (computationally difficult, but accurate under mild nonlinearity)
@@ -339,7 +339,7 @@ end
 function mean(X::SigmaPoints{<:AbstractVector{<:Number}})
     # Return projected mean if option is used (simpler and more numerically stable)
     if X.weights.proj 
-        return X[0]
+        return copy(X[0]) #Copy to ensure independence
     end
 
     # Use differntial form to calculate weighted mean (computationally difficult, but accurate under mild nonlinearity)
