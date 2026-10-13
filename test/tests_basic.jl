@@ -153,10 +153,10 @@ end
     @test mean(x⁺) ≈ 0.001
     @test std(x⁺) ≈ 1.0
 
-    # Severe bouncing, mild shrinkage if σ grows to point where sigma points trigger discontinuity
+    # Severe bouncing and growth if σ grows to point where sigma points trigger discontinuity
     x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=false), 0.001 ± 2.0)
     @test mean(x⁺) > 500
-    @test std(x⁺) < 2.0
+    @test std(x⁺) > 400000
 
     # Bouncing goes away when using projected mean, there is still similar amounts of shrinkage
     x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=true), 0.001 ± 2.0)

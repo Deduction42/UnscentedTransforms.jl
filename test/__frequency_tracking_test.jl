@@ -63,7 +63,7 @@ function predictor_func(X, u)
     return exp(A*Δt)*X #Discretize A and then predict result
 end
 
-predictor = NonlinearPredictor(f=predictor_func, ε=MvGaussian(QU), θ=SigmaParams(α=1.0))
+predictor = NonlinearPredictor(f=predictor_func, ε=MvGaussian(QU), θ=SigmaParams(α=1.0, proj=false))
 
 C = @SMatrix [1 0 0 ; 0 1 0]
 D = @SMatrix zeros(2,0)

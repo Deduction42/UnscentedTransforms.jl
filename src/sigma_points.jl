@@ -177,16 +177,12 @@ combine(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints) = combin
 
 function combine!(op::Union{typeof(+), typeof(-)}, g::MvGaussian, X::SigmaPoints)
     w = X.weights
-    x0 = X[begin]
-    μ = vecupdate!(op, mean(g), x0, true)
+    μ = op(mean(g), mean(X))
     δ = Vector(μ)
     ch = densechol(std(g))
 
     for i in (firstindex(X)+1):lastindex(X)
-        δ .= X[i] .- x0
-        if !w.proj #Only update mean if projected is not used
-            μ = vecupdate!(+, μ, δ, w[i])
-        end
+        δ .= X[i] .- μ
         cholupdate!(ch, δ, w[i])
     end
     return MvGaussian(μ, ch)
@@ -194,15 +190,11 @@ end
 
 function combine(op::Union{typeof(+), typeof(-)}, g::UvGaussian, X::SigmaPoints)
     w  = X.weights
-    x0 = X[begin]
-    μ  = op(mean(g), x0)
+    μ  = op(mean(g), mean(X))
     σ² = abs2(std(g))
 
     for i in (firstindex(X)+1):lastindex(X)
-        δ = X[i] - x0
-        if !w.proj #Only update mean if projected is not used
-            μ  += w[i]*δ
-        end
+        δ = X[i] - μ
         σ² += w[i]*abs2(δ)
     end
     return UvGaussian(μ, sqrt(σ²))
@@ -215,7 +207,7 @@ combine(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussian) = combi
 combine(op::Union{typeof(+), typeof(-)}, g1::UvGaussian, g2::UvGaussian) = UvGaussian(op(mean(g1), mean(g2)), sqrt(cov(g1)+cov(g2)))
 
 function combine!(op::Union{typeof(+), typeof(-)}, g1::MvGaussian, g2::MvGaussian)
-    μ = vecupdate!(op, mean(g1), mean(g2), true)
+    μ = op(mean(g1), mean(g2))
     σ = densechol(std(g1))
     δ = Vector(cholcol(g2, 1))
 
@@ -239,7 +231,7 @@ function cov(X::SigmaPoints, Y::SigmaPoints)
         error("Two sets of sigma points must have the same number of points ($(nx) ≠ $(ny))")
     end
 
-    (μx, μy) = (X[begin], Y[begin])
+    (μx, μy) = (mean(X), mean(Y))
     T = promote_type(Float64, eltype(μx), eltype(μy))
     S = zeros(T, length(μx), length(μy))
     inds = (firstindex(X)+1):lastindex(X)
@@ -319,18 +311,51 @@ function cholupdate!(ch::Cholesky, x::Vector, w::Real)
     return w >= 0 ? lowrankupdate!(ch, x) : lowrankdowndate!(ch, x)
 end
 
-function vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::AbstractVector, w::Real)
-    if can_setindex(μ)
-        μ .+= op(w).*x
-        return μ
+# Function to calculate mean using original weighted formula
+function mean(X::SigmaPoints{<:AbstractVector{<:AbstractVector}})
+    # Return projected mean if option is used (simpler and more numerically stable)
+    if X.weights.proj 
+        return X[0]
     end
-    return μ .+ op(w).*x
+
+    # Use differntial form to calculate weighted mean (computationally difficult, but accurate under mild nonlinearity)
+    x0 = X[0]
+    μ  = copy(x0)
+    w  = X.weights
+    for i in 1:lastindex(X.weights)
+        if can_setindex(μ)
+            μ .+= w[i].*(X[i] .- x0)
+        else
+            μ = μ .+ w[i].*(X[i] .- x0)
+        end
+    end
+
+    return μ
+
+    #Original form, which is computationally simple, but prone to roundoff error 
+    #sum(i-> X[i]*X.weights[i], eachindex(X.weights))
 end
 
+function mean(X::SigmaPoints{<:AbstractVector{<:Number}})
+    # Return projected mean if option is used (simpler and more numerically stable)
+    if X.weights.proj 
+        return X[0]
+    end
 
-vecupdate!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*op(w)
-vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::ZeroVec, w::Real) = μ
-vecupdate!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::ZeroVec, w::Real) = ZeroVec()
+    # Use differntial form to calculate weighted mean (computationally difficult, but accurate under mild nonlinearity)
+    x0 = X[0]
+    μ  = copy(x0)
+    w  = X.weights
+    for i in 1:lastindex(X.weights)
+        μ = μ .+ w[i].*(X[i] .- x0)
+    end
+
+    return μ
+    #Original form, which is computationally simple, but prone to roundoff error 
+    #sum(i-> X[i]*X.weights[i], eachindex(X.weights))
+end
+
+mean(X::SigmaPoints{<:AbstractGaussian}) = mean(X.source)
 
 cholvar(ch::Cholesky) = map(ii->cholvar(ch, ii), axes(ch.U, 2))
 cholstd(ch::Cholesky) = map(ii->cholstd(ch, ii), axes(ch.U, 2))
@@ -343,3 +368,18 @@ end
 
 
 Base.isfinite(x::MvGaussian) = all(isfinite, x.μ) & all(isfinite, x.σ.L)
+
+#=
+function vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::AbstractVector, w::Real)
+    if can_setindex(μ)
+        μ .+= op(w).*x
+        return μ
+    end
+    return μ .+ op(w).*x
+end
+
+vecupdate!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::AbstractVector, w::Real) = x*op(w)
+vecupdate!(op::Union{typeof(+), typeof(-)}, μ::AbstractVector, x::ZeroVec, w::Real) = μ
+vecupdate!(op::Union{typeof(+), typeof(-)}, μ::ZeroVec, x::ZeroVec, w::Real) = ZeroVec()
+=#
+
