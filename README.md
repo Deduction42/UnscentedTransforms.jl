@@ -270,18 +270,18 @@ The following is an example on defining constraints on a vector (multivariate) a
 using StaticArrays 
 
 # Define a clamped version of the function
-my1div23(x::SVector{3}) = x[1]/(max(x[2], 1e-14)*max(x[3], 1e-14))
+my1div23(x::SVector{3}) = x[1]/(x[2]*x[3])
 
-# Original result with clamping and massive bouncing
+# Original result with asymptote jumping and reduced mean/variance
 julia> gaussian(my1div23, SigmaParams(proj=false), SA[1.0,0.5,0.5] ± Diagonal(SA[1,1,1]))
-6.666666666666831e13 ± 1.1547005383792284e14
+1.0909090909090908 ± 5.454545454545454
 
 # Define the domain limits as a single vector
-UnscentedTransforms.domainlimits(f::typeof(my1div23), ::Type{<:SVector{3}}) = ArgLimits(SVector(NaN, 1e-3, 1e-3))
+UnscentedTransforms.domainlimits(f::typeof(my1div23), ::Type{<:SVector{3}}) = ArgLimits(SVector(NaN, 0, 0))
 
-# Bouncing is reduced
-julia> gaussian(my1div23, SigmaParams(proj=false, ϵ=0.1), SA[1.0,0.5,0.5] ± Diagonal(SA[1,1,1]))
-107.90913644881758 ± 47.95456822440879
+# More variance is captured
+julia> gaussian(my1div23, SigmaParams(proj=false, ϵ=0), SA[1.0,0.5,0.5] ± Diagonal(SA[1,1,1]))
+108.72727272727269 ± 48.363636363636346
 ```
 
 
