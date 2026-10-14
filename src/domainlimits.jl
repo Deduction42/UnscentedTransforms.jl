@@ -45,24 +45,6 @@ ArgLimits() = ArgLimits{0, Union{}}()
 
 const DomainLimits = Union{ArgLimits, Tuple{Vararg{<:ArgLimits}}}
 
-#=
-function ArgLimits(arg1::Tuple, argN::Tuple...)
-    args = (arg1, argN...)
-    allequal(length, args) || throw(ArgumentError("All limit arguments must have the same length, received $(args)"))
-    argtypes = map(typeof, args)
-
-    N = length(args)
-    T = reduce(_promote_fieldtypes, argtypes)
-
-    return ArgLimits{N,T}(arg1, argN...)
-end
-
-function _promote_fieldtypes(::Type{T1}, ::Type{T2}) where {N, T1<:Tuple{Vararg{<:Any,N}}, T2<:Tuple{Vararg{<:Any,N}}} 
-    T = map(promote_type, fieldtypes(T1), fieldtypes(T2))
-    return Tuple{T...}
-end
-=#
-
 
 """
 domainlimits(f::Function)
@@ -144,29 +126,29 @@ scale_weights(current::SigmaWeights, arglims::DomainLimits, args::AbstractGaussi
 #Used to find the sigma weights for a correlated multivariate distribution 
 function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::ArgLimits{<:Any,<:AbstractVector}, arg::MvGaussian)
     #Closure to calcualte new weight (clamped by w.ϵ) given an index
-    _scale_weight_closure(i::Integer) = min(w.wi.all/w.ϵ, _scale_weight(w.wi.all, arglims, mean(arg), cholcol(arg, i)))
+    _scale_weight_closure(i::Integer) = min(w.wi.all/abs2(w.ϵ), _scale_weight(w.wi.all, arglims, mean(arg), cholcol(arg, i)))
 
     vw = map(_scale_weight_closure, similar_indices(mean(arg)))
     w0 = 1 - 2*sum(vw)
-    return SigmaWeights(w.N, w0, [vw; vw], w.ϵ)
+    return SigmaWeights(w.N, w0, [vw; vw], w.ϵ, w.proj)
 end
 
 #Used to find the sigma weights for a set of uncorrelated variables
 function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::Tuple{Vararg{ArgLimits{<:Any,<:Number}}}, args::UvGaussian...)
     #Closure to calculate a new weight (clamped by w.ϵ) for each independent variable and its corresponding limits
-    _scale_weight_closure(xlims, x) = min(w.wi.all/w.ϵ, _scale_weight(w.wi.all, xlims, x))
+    _scale_weight_closure(xlims, x) = min(w.wi.all/abs2(w.ϵ), _scale_weight(w.wi.all, xlims, x))
 
     length(arglims) == length(args) || throw(DimensionMismatch("Arguments must have the same length (recieved $(arglims), $(args))"))
     vw = SVector(map(_scale_weight_closure, arglims, args))
     w0 = 1 - 2*sum(vw)
-    return SigmaWeights(w.N, w0, [vw; vw], w.ϵ)
+    return SigmaWeights(w.N, w0, [vw; vw], w.ϵ, w.proj)
 end
 
 #Used to find the sigma weights for a single variable 
 function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::ArgLimits, arg::UvGaussian)
-    wi = _scale_weight(w.wi.all, arglims, arg)
+    wi = min(w.wi.all/abs2(w.ϵ), _scale_weight(w.wi.all, arglims, arg))
     w0 = 1 - 2*wi 
-    return SigmaWeights(w.N, w0, SVector(wi, wi), w.ϵ)
+    return SigmaWeights(w.N, w0, SVector(wi, wi), w.ϵ, w.proj)
 end
 
 #Used to convert spread to weights 

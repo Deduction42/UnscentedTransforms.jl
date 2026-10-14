@@ -1,7 +1,10 @@
 
+using Revise 
+using UnscentedTransforms
 using LinearAlgebra
 using StaticArrays
 using Statistics
+using Test
 import Random
 
 import UnscentedTransforms.choladdleft
@@ -36,11 +39,11 @@ import UnscentedTransforms.ArgLimits
     @test x1/(1 ± 0) ≈ x1
     @test std(x1*x2) > 1
     @test sin(0 ± 0.0001) ≈ 0 ± 0.0001
-    @test mean(cos(0 ± 0.001)) < 1
+    @test mean(cos(0 ± 0.001)) == 1
     @test std(cos(0 ± 0.001)) < 0.001
     @test mean(tan(0 ± 0.001)) ≈ 0.0
     @test std(tan(0 ± 0.001)) > 0.001
-    @test mean(exp(1 ± 0.001)) > exp(1)
+    @test mean(exp(1 ± 0.001)) ≈ exp(1)
     @test std(exp(1 ± 0.001)) > exp(1)*0.001
 end
 
@@ -74,8 +77,6 @@ end
     @test joint(x1, x1) ≈ MvGaussian(mean(x1), std(x1).L*sqrt(1/2))
     @test joint(x1, x1, x1) ≈ MvGaussian(mean(x1), std(x1).L*sqrt(1/3))
     @test joint(x1, x1, x1, x1) ≈ MvGaussian(mean(x1), std(x1).L/2) 
-    
-
 end
 
 @testset "Sigma Points" begin
@@ -89,7 +90,6 @@ end
     Yh = X*C' 
     Y  = Yh .+ σ.*randn(500, 3)
 
-    θ  = SigmaParams(α=0.5)
     mx = mean(X, dims=1)[:]
     my = mean(Y, dims=1)[:]
     Sx = cov(X)
@@ -102,27 +102,79 @@ end
     Gx = MvGaussian(mx, Cx)
     Gy = MvGaussian(my, Cy)
 
-    Px  = SigmaPoints(θ, Gx)
-    Py  = SigmaPoints(θ, Gy)
-    Pyh = map(x->C*x, Px)
-
-    #Test round-trip conversionlas
-    Pxh = SigmaPoints(source=collect(Px), weights=Px.weights)
-    @test std(MvGaussian(Pxh)).U ≈ std(Gx).U
-    @test MvGaussian(Pxh).μ ≈ Gx.μ
-
-    #Test adding distributions and variances
-    @test std(Gx + Gx).L ≈ cholesky(Sx + Sx).L
-    @test std(Gx - Gx).L ≈ cholesky(Sx + Sx).L
-    @test std(Gx + MvGaussian(Cx)).L ≈ cholesky(Sx + Sx).L
-    @test std(MvGaussian(Cx) + Gx).L ≈ cholesky(Sx + Sx).L
-    @test cov(Px, Px) ≈ cov(Gx)
-    @test cov(Px, Pyh) ≈ cov(Pyh, Px)'
-    
-    #@test add_rcov(Cx.U*C', Cx.U*C').U ≈ cholesky(hermitianpart!(2*C*Sx*C')).U
+    #Test some shortcut linear operations
     @test choladdleft(C*Cx.L, C*Cx.L).L ≈ cholesky(hermitianpart!(2*C*Sx*C')).L
     @test choladdleft(Cx, A*Cx.L).L ≈ cholesky(hermitianpart(Sx + A*Sx*A')).L
-    @test std(MvGaussian(Px, Cx)).U ≈ cholesky(Sx).U
+
+    #Test various values of α
+    for αi in [0.01, 0.1, 0.5, 1.0, 2.0]
+        θ = SigmaParams(α=αi)
+
+        Px  = SigmaPoints(θ, Gx)
+        Py  = SigmaPoints(θ, Gy)
+        Pyh = map(x->C*x, Px)
+
+        #Test round-trip conversionlas
+        Pxh = SigmaPoints(source=collect(Px), weights=Px.weights)
+        @test std(MvGaussian(Pxh)).U ≈ std(Gx).U
+        @test MvGaussian(Pxh).μ ≈ Gx.μ
+
+        #Test adding distributions and variances
+        @test std(Gx + Gx).L ≈ cholesky(Sx + Sx).L
+        @test std(Gx - Gx).L ≈ cholesky(Sx + Sx).L
+        @test std(Gx + MvGaussian(Cx)).L ≈ cholesky(Sx + Sx).L
+        @test std(MvGaussian(Cx) + Gx).L ≈ cholesky(Sx + Sx).L
+        @test cov(Px, Px) ≈ cov(Gx)
+        @test cov(Px, Pyh) ≈ cov(Pyh, Px)'
+        @test std(MvGaussian(Px, Cx)).U ≈ cholesky(Sx).U
+    end
+
+    #Test consistency between α and ϵ
+    mysqrt(x::Real) = sqrt(max(0,x))
+    UnscentedTransforms.domainlimits(f::typeof(mysqrt), ::Type{<:Real}) = ArgLimits(0)
+    @test gaussian(x->sqrt(max(0,x)), SigmaParams(α=0.01, proj=false), 0.01 ± 0.00) ≈ gaussian(mysqrt, SigmaParams(ϵ=0.01, proj=false), 0.01 ± 0.00)
+    
+end
+
+@testset "Bouncing and Shrinkage" begin
+    positive(x::Real) = max(x, zero(x))
+
+    # No bouncing
+    x⁺ = gaussian(positive, SigmaParams(α=1.0, proj=false), 0.001 ± 0.001)
+    @test mean(x⁺) ≈ 0.001
+    @test std(x⁺) ≈ 0.001
+
+    # Mild bouncing and shrinkage
+    x⁺ = gaussian(positive, SigmaParams(α=1.0, proj=false), 0.001 ± 1.0)
+    @test mean(x⁺) > 0.5
+    @test std(x⁺) < 1.0
+
+    # No bouncing for same distribution above if using projection
+    x⁺ = gaussian(positive, SigmaParams(α=1.0, proj=true), 0.001 ± 1.0)
+    @test mean(x⁺) ≈ 0.001
+    @test std(x⁺) < 1.0
+
+    # No bouncing and no shrinkage for same distribution if α set to value where sigma points don't trigger discontinuity
+    x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=false), 0.001 ± 1.0)
+    @test mean(x⁺) ≈ 0.001
+    @test std(x⁺) ≈ 1.0
+
+    # Severe bouncing and mild shrinkage if σ grows to point where sigma points trigger discontinuity
+    x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=false), 0.001 ± 2.0)
+    @test mean(x⁺) > 500
+    @test std(x⁺) < 2.0
+
+    # Bouncing goes away with mild srinkage when using projected mean
+    x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=true), 0.001 ± 2.0)
+    @test mean(x⁺) ≈ 0.001
+    @test std(x⁺) < 2.0
+
+    # Add limits to this function to remove shrinkage 
+    UnscentedTransforms.domainlimits(f::typeof(positive), ::Type{<:Real}) = ArgLimits(0)
+    x⁺ = gaussian(positive, SigmaParams(α=1, proj=true), 0.001 ± 2.0)
+    @test mean(x⁺) ≈ 0.001 
+    @test std(x⁺) ≈ 2.0
+    UnscentedTransforms.domainlimits(f::typeof(positive), ::Type{<:Real}) = ArgLimits() #Revert to default behaviour
 end
 
 @testset "Sigma Point Scaling" begin 
