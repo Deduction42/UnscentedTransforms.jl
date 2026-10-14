@@ -174,7 +174,7 @@ end
     x⁺ = gaussian(positive, SigmaParams(α=1, proj=true), 0.001 ± 2.0)
     @test mean(x⁺) ≈ 0.001 
     @test std(x⁺) ≈ 2.0
-    UnscentedTransforms.domainlimits(f::typeof(positive), ::Type{<:Real}) = ArgLimits() #Revert to default behaviour
+    #UnscentedTransforms.domainlimits(f::typeof(positive), ::Type{<:Real}) = ArgLimits() #Revert to default behaviour
 end
 
 @testset "Sigma Point Scaling" begin 

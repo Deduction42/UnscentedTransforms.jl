@@ -43,7 +43,7 @@ end
 
 ArgLimits() = ArgLimits{0, Union{}}()
 
-const DomainLimits = Union{ArgLimits, Tuple{Vararg{<:ArgLimits}}}
+const DomainLimits = Union{ArgLimits, Tuple{Vararg{ArgLimits}}}
 
 
 """
@@ -134,7 +134,7 @@ function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::ArgLimits{<:Any,<
 end
 
 #Used to find the sigma weights for a set of uncorrelated variables
-function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::Tuple{Vararg{ArgLimits{<:Any,<:Number}}}, args::UvGaussian...)
+function _scaled_weights(w::SigmaWeights{<:ConstVec}, arglims::Tuple{Vararg{ArgLimits}}, args::UvGaussian...)
     #Closure to calculate a new weight (clamped by w.ϵ) for each independent variable and its corresponding limits
     _scale_weight_closure(xlims, x) = min(w.wi.all/abs2(w.ϵ), _scale_weight(w.wi.all, xlims, x))
 
