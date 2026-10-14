@@ -15,9 +15,9 @@ Accessors = "0.1.45"
 ArrayInterface = "7.30"
 LinearAlgebra = "1.13"
 StaticArrays = "1.9"
-Statistics = "1.11"
-Test = "1.13"
-julia = "1.13"
+Statistics = "1.10"
+Test = "1.10"
+julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
