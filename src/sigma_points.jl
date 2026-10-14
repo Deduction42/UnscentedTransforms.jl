@@ -92,7 +92,7 @@ Base.@kwdef struct SigmaPoints{S,T} <: AbstractVector{T}
     SigmaPoints(w::SigmaWeights, source::UvGaussian) = new{typeof(source), meantype(source)}(w, source)
     SigmaPoints(w::SigmaWeights, source::MvGaussian) = new{typeof(source), meantype(source)}(w, source)
     SigmaPoints(w::SigmaWeights, source::AbstractGaussian) = new{typeof(source), meantype(source)}(w, source)
-    SigmaPoints(w::SigmaWeights, source::Tuple{Vararg{<:UvGaussian}}) = new{typeof(source), meantype(source[begin])}(w, source)
+    SigmaPoints(w::SigmaWeights, source::Tuple{Vararg{UvGaussian}}) = new{typeof(source), meantype(source[begin])}(w, source)
 
     function SigmaPoints(w::SigmaWeights, source::AbstractVector) 
         Base.require_one_based_indexing(source)
@@ -114,11 +114,11 @@ Base.has_offset_axes(obj::SigmaPoints) = true
 halfindex(x::SigmaPoints) = x.weights.N
 dimlength(x::MvGaussian) = size(std(x), 1)
 dimlength(x::UvGaussian) = 1
-dimlength(tx::Tuple{Vararg{<:AbstractGaussian}}) = sum(dimlength, tx, init=0)
+dimlength(tx::Tuple{Vararg{AbstractGaussian}}) = sum(dimlength, tx, init=0)
 dimlength(X::SigmaPoints{<:AbstractGaussian}) = dimlength(X.source)
 dimlength(X::SigmaPoints{<:UvGaussian}) = 1
 dimlength(X::SigmaPoints{<:AbstractVector}) = length(X.source[begin])
-dimlength(x::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}) = length(x.source)
+dimlength(x::SigmaPoints{<:Tuple{T}}) where {T <: UvGaussian} = length(x.source)
 
 #If source is a vector, simply index it
 Base.getindex(X::SigmaPoints{<:AbstractVector}, i::Int) = X.source[i+1]
@@ -146,7 +146,7 @@ function Base.getindex(X::SigmaPoints{<:AbstractGaussian}, i::Int)
 end
 
 #If the source is a tuple of UvGaussians, generate the sigma point
-function Base.getindex(X::SigmaPoints{<:Tuple{Vararg{<:UvGaussian}}}, i::Int)
+function Base.getindex(X::SigmaPoints{<:Tuple{Vararg{UvGaussian}}}, i::Int)
     μ = map(mean, X.source)
     i == firstindex(X) && return μ
 

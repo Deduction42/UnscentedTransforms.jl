@@ -1,6 +1,4 @@
 ToDo:
-0.  Fix the Tuple{Vararg{<:T}} issue (use Tuple{Vararg{T}} instead)
-
 1.  Add documentation about "projections" and "bouncing" 
     -   Re-evaluate current examples to ensure consistency
     -   Give examples on how "bouncing" can occur 

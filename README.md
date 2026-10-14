@@ -154,7 +154,7 @@ SigmaParams(α=1)
 ```
 The default value of `α=1` which maps to a value of `κ=0`. While there are different recommendations on setting these values for varying reasons, we recommend these default values `α=1.0` or `κ=0.0` due to the following reasons: 
 1. *Representation:* Setting `α=1` or `κ=0` defines an ellipse that covers a reasonable proportion of the data (68.27% of the data for a 1-dimensional Gaussian, approaching 50% for higher-dimensional Gaussians). Most of the data in this distribution is going to be this far from the mean.
-2. *Mitigating the "bounce" effect:* Setting `α` so a very small value (such as `α<0.01`) can cause any clamping behaviour in your internal function to *bounce* the mean away from your limit, causing instability in the estimates. The smaller the `α` value, the rarer bouncing will be, but at the cost of more severe effects.
+2. *Avoiding Error Amplification:* Setting `α` so a very small value (such as `α<0.01`) can prevent the sigma points from hitting a point of excessive nonlinearity (which can happen if arguments are clamped). However, if a sigma point does hit a strong nonlinearity, these effects can be *amplified* due to large weights associated with small `α`.
 
 ### Weighted versus Projected Mean 
 The traditional unscented transform calculates a weighted average for the mean. This can be set by using
@@ -176,8 +176,8 @@ julia> gaussian(exp, SigmaParams(proj=false), x)
 ```
 Note that a monte carlo simulation would produce results close to `56.7 ± 479.0` (highest accuracy) while Measurements.jl would produce `1.0 ± 3.0`. While both UnscentedTransforms.jl and Measurements.jl underestimate the mean and the variance, the unscented transform with SigmaParams(proj=false) produced the closest result to the Monte Carlo simulation. **In geneneral, setting `SigmaParams(proj=false)` is generally more accurate, and is strongly recommended if you're using a Kalman filter, as it is more robust against divergence**. 
 
-### The Bounce Effect
-*Bouncing* happens when sigma points cross a boundary of high nonlinearity. This typically happens when trying to constrain arguments to be inside a feasible region. In the example below, we are simply trying to constrain `x` to be positive.
+### The Bounce Effect (Clamped Parameter Estimation)
+The UKF can struggle when sigma points enter a region of high nonlinearity (i.e. too nonlinear to be expressed by a 3rd order Taylor series). Unfortunately, this can easily happen during parameter estimation if one tries to constrain arguments by clamping. If a sigma point gets clamped, it produces a *bounce effect* on the parameter estimates, where a parameter drifts toward a constraint, but dramatically *bounces away* once a related sigma point gets clamped. In the example below, we are simply trying to constrain `x` to be positive.
 ```julia
 positive(x::Real) = max(0,x)
 
@@ -185,20 +185,20 @@ positive(x::Real) = max(0,x)
 julia> x⁺ = gaussian(positive, SigmaParams(α=1.0, proj=false), 0.001 ± 0.001)
 0.001 ± 0.001
 
-# Growing the variance causes sigma points to hit a strong nonlinearity, causing the mean to bounce mildly
+# Growing the variance causes sigma points to hit a strong nonlinearity, causing the mean to bounce mildly away from the constraint
 x⁺ = gaussian(positive, SigmaParams(α=1.0, proj=false), 0.001 ± 1.0)
 0.5005 ± 0.7071071347398497
 
-# Using a smaller value of α can prevent bouncing by keeping sigma points in a well-defined region
+# Using a smaller value of α can prevent bouncing by keeping sigma points inside a well-defined region
 x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=false), 0.001 ± 1.0)
 0.0009999999999763531 ± 1.0
 
-# If variance grows such that points stray beyond that region, small values of α can AMPLIFY the bounce effect
-# This means that small values of α can be risky if you have non-smooth functions
+# If variance grows such that points stray beyond that region, tighly clumped sigma points can AMPLIFY the bounce effect
+# This means that small values of α can be risky if any states need clamping
 x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=false), 0.001 ± 2.0)
 500.001 ± 1.5811388300841898
 
-# Using projected means can mitigate this effect, which is why it's default 
+# Using projected means can mitigate this effect on the mean which is why it's default 
 x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=true), 0.001 ± 2.0)
 0.001 ± 1.5811388300841898
 
@@ -207,19 +207,28 @@ x⁺ = gaussian(positive, SigmaParams(α=1, proj=true), 0.001 ± 2.0)
 ```
 
 ## Sigma Point Scaling
-This package also supports automated scaling of sigma points on order to avoid triggering the *bounace effect* on crossing constraints. `SigmaParams` contains an additional `ϵ` parameter that can act as a minimum effective value of `α`. However, care must be taken as small values of `ϵ` can cause numerical instability and also amplify the bounce effect if the mean is too close to the boundary. In general, small values of `ϵ` can be used if using projected means, otheriwise you may want to use values closer to 1 which will mitigate mild bouncing while not amplifying it too much.
+This package also supports automated scaling of sigma points which can be useful in two scenarios: 
+1. Avoiding the *bounace effect* caused by sigma points being clamped. 
+2. Preventing a sigma point from *jumping over an asymptote* if the function is not constrained
+
+Scaling sigma points requires two actions to be taken:
+1. Extending the experimental `UnscentedTransforms.domainlimits(f::typeof(<myfunc>), ::Type{<argument types>}...)` function to the appropriate argument limits `(ArgLimits(<first arg limits>...), ArgLimits(<second arg limits>...))`
+2. Setting the `ϵ` (\epsilon) parameter in the `SigmaParams` that can act as a minimum effective value of `α`. 
+
+Calling `gaussian(<myfunc>, SigmaParams(ϵ=1e-6), args::AbstractGaussian...)` will look up the domain limits of that function and apply them if any appear (by default functions return no limits `ArgLimits()`). The value of `ϵ` will set the minimum amount of spread; small values of `ϵ` will better prevent constraint violations but can risk roundoff error because points are too close together; this is especially true in multivariate scenarios. In particular, care must be taken agaisnt small values of `ϵ` when clamping parameters as it can amplify bouncing.
 ```julia
-SigmaParams(α=1, ϵ=1e-6, proj=true) 
-SigmaParams(α=1, ϵ=0.3, proj=false) #Don't use very small values of ϵ if proj=false
+SigmaParams(α=1, ϵ=1e-6, proj=true) #Small values work for univariates
+SigmaParams(α=1, ϵ=0.3, proj=false) #Don't use very small values of ϵ if proj=false and multivariate
 ```
 
 ### Constraining Sigma Points
-Unscented transforms have the advantage over linear error propagation by being a second-order approximation of the Gaussian instead of a first-order approximation; they also do not require differentiating over the expression. However, one major drawback to unscented transforms is that the sigma points could potentially end up in an infeasible region of the function. This problem can be addressed in two steps:
+Sigma points can be constrained by taking these two steps:
 
 1. Clamping sigma points to be inside the feasible region at the beginning of the function. This is a simple solution, but can be prone to *bouncing*. 
-2. Constraining sigma points by extending `domainlimits` to your function (an experimental feature with an example shown later). This will *attempt* to reign in the sigma points and adjust the weights so that bouncing is rarer. Because the gap between the center and edge points (related to `sqrt(ϵ)`) needs to be large enough to calculate a reliable difference, there is a limit to how much this algorithm can scale down the points. Thus, clamping arguments is still required, and small values of `ϵ` risk amplifying bouncing if `proj=false`.
+2. Constraining sigma points by extending `UnscentedTransforms.domainlimits` to your function (experimental feature)
+3. Setting an apprpriate `ϵ=0.3` parameter (either in your `gaussian` call or `NonlinearPredictor` arguments in the UKF)
 
-#### Single-Argument Constraints
+#### Single-Argument Domain Limits
 Constraining sigma points can be done by extending the `domainlimits` function. Here is an example of how to do this for a single-argument function:
 ```julia
 # Define a clamped version of the function
@@ -237,25 +246,25 @@ julia> gaussian(positive, SigmaParams(ϵ=0.1, proj=false), 0.1 ± 0.2)
 0.10000000000000003 ± 0.20000000000000004
 ```
 
-#### Multiple-Argument Constraints
+#### Multiple-Argument Domain Limits
 The following is an example of defining constraints for multiple arguments
 ```julia
-# Define a clamped version of the function
-mydiv(x::Real, y::Real) = x/max(y, 1e-14)
+# Note that this function isn't clamped
+mydiv(x::Real, y::Real) = x/y
 
-# Observe a massive bounce effect
-julia> gaussian(mydiv, SigmaParams(ϵ=1e-1, proj=false), 1.0 ± 1.0, 0.5 ± 1.0)
-2.5000000000001125e13 ± 4.999999999999899e13
+# Sigma point jumps asymptote, giving artificially low variance
+julia> gaussian(mydiv, SigmaParams(proj=false), 1.0 ± 1.0, 0.5 ± 1.0)
+0.8571428571428574 ± 2.6341555592265387
 
 # Define a "domainlimits" function for it, for multiple arguments, use a Tuple with an ArgLimits for each argument
-UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = (ArgLimits(NaN), ArgLimits(1e-14))
+UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = (ArgLimits(NaN), ArgLimits(0))
 
-# Much smaller "bounce", but captures nonlinear effects
-julia> gaussian(mydiv, SigmaParams(ϵ=1e-1, proj=false), 1.0 ± 1.0, 0.5 ± 1.0)
-28.18181818181611 ± 17.157510463036473
+# Better capture of nonlinear behaviour
+julia> gaussian(mydiv, SigmaParams(ϵ=0, proj=false), 1.0 ± 1.0, 0.5 ± 1.0)
+28.181818181818176 ± 17.157510463037926
 ```
 
-#### Multivariate Constraints
+#### Multivariate Domain Limits
 The following is an example on defining constraints on a vector (multivariate) argument
 ```julia
 using StaticArrays 
