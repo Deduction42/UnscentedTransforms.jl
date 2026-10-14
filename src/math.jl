@@ -57,7 +57,6 @@ function gaussian(f, θ::SigmaParams, args::UvGaussian...)
     X0 = SigmaPoints(w, args...)
     indvec = SVector{Np}(firstindex(X0):lastindex(X0))
     X1 = SigmaPoints(w, map(ind->f(X0[ind]...), indvec)) #Non-allocating result
-
     return gaussian(X1)
 end
 

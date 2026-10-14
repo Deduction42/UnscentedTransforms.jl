@@ -1,63 +1,11 @@
 ToDo:
-0.  Consider adding a parameter "projected = true" as an option to use the projected mean 
-    -   This is easy enough to be done on the "Dev" branch and merged to "main" after testing
-    -   True should be default because 
-        1.  Most people expect the means to follow the calculation and variances should be large if nonlinear
-        2.  Using projected mean should minimize the effects of "mean-bouncing" with clamped constraints
-        3.  The only reason to use "domainlimits" after this is to avoid "uncertainty-shrinkage"
-    -   False should be used when applying a UKF to an unconstrained problem
+0.  Fix the Tuple{Vararg{<:T}} issue (use Tuple{Vararg{T}} instead)
 
-1.  Fix an example where the gap appears to go below ϵ
-    -   This should be done in a new "scaled_points_experiments" branch
-    ```julia
-    # Define a clamped version of the function
-    mysqrt(x::Real) = sqrt(max(0,x))
-
-    # This produces an unexpected result (because NaN should only happen if ϵ=0)
-    julia> gaussian(mysqrt, SigmaParams(ϵ=1e-6), 0.0 ± 1.0)
-    NaN ± NaN
-    ```
-
-2.  Investigate sigma point clamping for this example that seems a little odd (other examples could be affected)
-    -   Make sure linear versions work with small values of α
-    -   This should also be done in a new "scaled_points_experiments" branch
-    ```julia
-    # Define a clamped version of the function
-    mydiv(x::Real, y::Real) = x/max(y, 1e-14)
-
-    # Observe a massive bounce effect
-    julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
-    2.500000000005017e13 ± 4.999999999994999e13
-
-    # Define a "domainlimits" function for it, for multiple arguments, use a Tuple with an ArgLimits for each argument
-    UnscentedTransforms.domainlimits(g::typeof(mydiv), ::Type{<:Real}, ::Type{<:Real}) = (ArgLimits(NaN), ArgLimits(1e-14))
-
-    # Much smaller "bounce" but relative uncertainty is TOO SMALL (Investigate this)
-    julia> gaussian(mydiv, SigmaParams(ϵ=1e-6), 1.0 ± 1.0, 0.01 ± 1.0)
-    1.0125072034739445e8 ± 1.4283600988937286e6
-    ```
-
-3.  Add a "rangelimits" function that clamps sigma point outputs for the mean
-    -   May not be neccessary if using "projected=true"
-    -   Applied using 
-        -   gaussian(f, X::SigmaPoints) = gaussian(rangelimits(f), X::SigmaPoints)
-        -   gaussian(lims::ArgLimits, X::SimgaPoints)
-    -   The function gaussian(lims::ArgLimits, X::SimgaPoints) should do the following:
-        -   Use the projected mean as a starting point 
-        -   Use the variance around the projected mean to determine the soft limits
-        -   Apply the soft limits to the final mean result of the SigmaPoints
+1.  Add documentation about "projections" and "bouncing" 
+    -   Re-evaluate current examples to ensure consistency
+    -   Give examples on how "bouncing" can occur 
+    -   Explain why "proj=true" is the default setting 
+    -   Explain why you want "proj=false, α=1, ϵ=0.3" when Kalman filtering
 
 
-(future)
-1.  Create a new unregistered repository called TagMeasurements.jl
-    -   This requires FlexUnits, TimeRecords, UnscentedTransforms as dependencies
-
-    -   Main object "TagMeas{T,D}" and should have the following fields:
-        -   name::String, value::RefValue{T}, stdev::RefValue{T}, reltol::T, abstol::T, units::Units{D, AffineTransform{Float64}},
-                bounds::SVector{2,T}, aggregation::Symbol, history::TimeSeries{T}, indhint::RefValue{Int}
-        -   include "abstol" and "reltol" fields that can be "nan"
-        -   "stdev" should be nanmax(m.abstol + m.reltol*m.value[])
-
-    -   Define the API for AbstractMeas and set "TagMeas" as one of the objects in this hierarchy 
-        -   readhistory!, rawvalue, rawstdev, rawgauss, sivalue, sistdev, sigauss, quantvalue, quantstdev, quantgauss
 
