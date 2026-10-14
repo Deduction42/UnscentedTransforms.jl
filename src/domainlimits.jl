@@ -37,7 +37,7 @@ struct ArgLimits{N,T}
 end
 
 function ArgLimits(args...)
-    allequal(length, args) || throw(ArgumentError("All limit arguments must have the same length, received $(args)"))
+    allequal(map(length, args)) || throw(ArgumentError("All limit arguments must have the same length, received $(args)"))
     return tuple2arglims(args)
 end
 
