@@ -13,7 +13,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 [compat]
 Accessors = "0.1.45"
 ArrayInterface = "7.30"
-LinearAlgebra = "1.13"
+LinearAlgebra = "1.10"
 StaticArrays = "1.9"
 Statistics = "1.10"
 Test = "1.10"
