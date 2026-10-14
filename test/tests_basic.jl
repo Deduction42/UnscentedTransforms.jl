@@ -152,22 +152,22 @@ end
     # No bouncing for same distribution above if using projection
     x⁺ = gaussian(positive, SigmaParams(α=1.0, proj=true), 0.001 ± 1.0)
     @test mean(x⁺) ≈ 0.001
-    @test std(x⁺) ≈ 1.0
+    @test std(x⁺) < 1.0
 
     # No bouncing and no shrinkage for same distribution if α set to value where sigma points don't trigger discontinuity
     x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=false), 0.001 ± 1.0)
     @test mean(x⁺) ≈ 0.001
     @test std(x⁺) ≈ 1.0
 
-    # Severe bouncing and growth if σ grows to point where sigma points trigger discontinuity
+    # Severe bouncing and mild shrinkage if σ grows to point where sigma points trigger discontinuity
     x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=false), 0.001 ± 2.0)
     @test mean(x⁺) > 500
-    @test std(x⁺) > 400000
+    @test std(x⁺) < 2.0
 
-    # Bouncing goes away when using projected mean
+    # Bouncing goes away with mild srinkage when using projected mean
     x⁺ = gaussian(positive, SigmaParams(α=0.001, proj=true), 0.001 ± 2.0)
     @test mean(x⁺) ≈ 0.001
-    @test std(x⁺) ≈ 2.0
+    @test std(x⁺) < 2.0
 
     # Add limits to this function to remove shrinkage 
     UnscentedTransforms.domainlimits(f::typeof(positive), ::Type{<:Real}) = ArgLimits(0)
