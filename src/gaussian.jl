@@ -101,7 +101,6 @@ gaussian(μ::Union{ZeroVec, AbstractVector}, σ::Union{Cholesky, AbstractMatrix}
 MvGaussian(args::UvGaussian...) = MvGaussian(SVector(map(mean, args)), Diagonal(SVector(map(std, args))))
 MvGaussian(args::AbstractVector{<:UvGaussian}) = MvGaussian(map(mean, args), Diagonal(map(std, args)))
 
-Base.convert(::Type{MvGaussian{TX,TM}}, x::MvGaussian) where {TX,TM} = MvGaussian(convert(TX, x.μ), convert(TM, x.σ))
 Base.length(x::MvGaussian) = size(x.σ, 1)
 Base.eltype(::Type{MvGaussian{Tμ,Tσ}}) where {Tμ,Tσ} = UvGaussian{promote_type(eltype(Tμ), eltype(Tσ))}
 Base.copy(x::MvGaussian) = MvGaussian(copy(mean(x)), copy(std(x)))

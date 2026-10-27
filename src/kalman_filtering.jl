@@ -28,7 +28,7 @@ y = f(x, u) + ε
 @kwdef struct NonlinearPredictor{TF, Tε<:MvGaussian} <: AbstractPredictor
     f :: TF
     ε :: Tε
-    θ :: SigmaParams
+    θ :: SigmaParams = SigmaParams(α=1.0, ϵ=0.3, proj=false)
     multithreaded :: Bool = false
 end
 NonlinearPredictor(f, Σ::AbstractMatrix, θ::SigmaParams, multithreaded::Bool) = NonlinearPredictor(f, MvGaussian(Σ), θ, multithreaded)
