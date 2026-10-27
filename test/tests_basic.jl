@@ -7,8 +7,7 @@ using Statistics
 using Test
 import Random
 
-import UnscentedTransforms.choladdleft
-import UnscentedTransforms.ArgLimits
+import UnscentedTransforms: choladdleft, ArgLimits, ZeroVec
 
 @testset "Univariate Math" begin
     (μ1, σ1) = (0.1, 1.0)
@@ -253,3 +252,26 @@ end
 end
 
 
+@testset "Conversions" begin 
+    TG = UvGaussian{Float64}
+    @test TG(1.0 ± 0.1) isa TG 
+    @test convert(TG, 1.0 ± 0.1) isa TG
+
+    TG = MvGaussian{Vector{Float32}, Diagonal{Float32}}
+    @test TG(ones(2) ± Cholesky(LowerTriangular(zeros(2,2)))) isa TG
+    @test convert(TG, ones(2) ± Cholesky(LowerTriangular(zeros(2,2)))) isa TG
+
+    TG = MvGaussian{Vector{Float32}, Cholesky{Float32, Matrix{Float32}}}
+    @test TG(ones(2) ± Diagonal(ones(2))) isa TG
+    @test convert(TG, ones(2) ± Diagonal(ones(2))) isa TG
+    @test TG(ones(2) ± LowerTriangular(ones(2,2))) isa TG 
+    @test convert(TG, ones(2) ± LowerTriangular(ones(2,2))) isa TG 
+
+    TG = MvGaussian{ZeroVec, Cholesky{Float32, Matrix{Float32}}}
+    @test TG(SA[0 ± 0.1, 0 ± 0.2]) isa TG 
+    @test convert(TG, SA[0 ± 0.1, 0 ± 0.2]) isa TG
+
+    TG = MvGaussian{ZeroVec, Diagonal{Float32, Vector{Float32}}}
+    @test TG(SA[0 ± 0.1, 0 ± 0.2]) isa TG 
+    @test convert(TG, SA[0 ± 0.1, 0 ± 0.2]) isa TG
+end
